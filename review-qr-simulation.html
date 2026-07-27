@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Google Review QR — Simulation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <h1>Google Review QR — Simulation</h1>
+  <div class="accent-bar">
+    <span style="background:var(--blue)"></span>
+    <span style="background:var(--red)"></span>
+    <span style="background:var(--yellow)"></span>
+    <span style="background:var(--green)"></span>
+  </div>
+  <p class="subtitle">Enter your business name and Google review link below — it generates a real, scannable QR code and drops it into two working scenarios: the physical counter, and the post-payment phone screen.</p>
+
+  <div class="input-panel">
+    <label>Business name</label>
+    <input id="bizName" type="text" placeholder="e.g. Shree Sai Salon" value="Shree Sai Salon" />
+    <label>Google review link</label>
+    <input id="reviewLink" type="text" placeholder="https://g.page/r/xxxxxxxx/review" value="https://g.page/r/example123/review" />
+    <p class="hint">Get your real link from Google Business Profile → Home → "Get more reviews." The QR below updates live.</p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="counter">1 · Counter, next to payment QR</button>
+    <button class="tab-btn" data-tab="phone">2 · After online / UPI payment</button>
+    <button class="tab-btn" data-tab="card">3 · Membership-style card</button>
+  </div>
+
+  <!-- Scene 1: Counter -->
+  <div class="scene active" id="scene-counter">
+    <div class="counter">
+      <div class="counter-card">
+        <div class="card-label-payment">Scan &amp; Pay</div>
+        <div class="qr-slot" id="qr-fake-upi"></div>
+        <div class="card-sub-payment" id="upi-biz-name">Shree Sai Salon</div>
+      </div>
+      <div class="counter-card">
+        <div class="card-label-review g-multicolor"><span>G</span><span>o</span><span>o</span><span>g</span><span>l</span><span>e</span> Reviews</div>
+        <div class="qr-slot" id="qr-review-counter"></div>
+        <div class="card-sub-review">Scan to share your experience</div>
+      </div>
+    </div>
+    <p class="caption">This is placed passively at the counter, next to your existing UPI payment QR — customers scan it whenever they choose, on their own phone. No staff prompting, no tablet handed over, no pressure while they're still standing there. That passive placement is exactly what keeps this compliant with Google's 2026 policy.</p>
+  </div>
+
+  <!-- Scene 2: Phone -->
+  <div class="scene" id="scene-phone">
+    <div class="phone-row">
+      <div class="phone">
+        <div class="phone-screen">
+          <div style="font-size:0.7rem;color:var(--ink-soft);align-self:flex-start;">UPI Payment</div>
+          <div class="check-circle">✓</div>
+          <div class="phone-title">Payment Successful</div>
+          <div class="phone-sub" id="phone-amount">₹450 paid to Shree Sai Salon</div>
+        </div>
+      </div>
+      <div class="phone-arrow">→</div>
+      <div class="phone">
+        <div class="phone-screen">
+          <div style="font-size:0.7rem;color:var(--ink-soft);align-self:flex-start;">SMS · a few minutes later</div>
+          <div class="phone-divider"></div>
+          <div class="nudge-box">
+            <div class="nudge-title">Thanks for visiting <span id="phone-biz-name">Shree Sai Salon</span>!</div>
+            <div class="nudge-text">We'd love your honest thoughts on Google — takes 30 seconds.</div>
+            <div class="nudge-qr" id="qr-review-phone"></div>
+            <div class="nudge-btn">Leave a review →</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">The QR/link isn't inside the payment app — it arrives afterward, as a separate message, once the transaction is already done. Same review link as the counter card, just reinforced digitally a few minutes later when the customer is more likely to actually act on it.</p>
+  </div>
+
+  <!-- Scene 3: Membership card -->
+  <div class="scene" id="scene-card">
+    <div class="biz-card-wrap">
+      <div class="biz-card">
+        <div class="biz-card-inner">
+          <div class="biz-card-header" id="card-biz-name">Shree Sai Salon</div>
+          <div class="biz-card-sub">Thank you for being a customer</div>
+          <div class="biz-card-qr" id="qr-review-card"></div>
+          <div class="biz-links">
+            <div><span class="dot" style="background:var(--blue)"></span> Leave a Google review</div>
+            <div><span class="dot" style="background:var(--red)"></span> Instagram @shreesaisalon</div>
+            <div><span class="dot" style="background:var(--green)"></span> WhatsApp for bookings</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">One QR, one card — but pointed only at the review link (the other lines are just printed text/icons, not separate scannable codes, to keep the ask itself uncluttered). Framed as a small thank-you handed to regulars, not a transactional request tied to any discount or reward — the moment it's tied to a discount, it becomes a banned incentivized review.</p>
+  </div>
+
+  <footer class="note">
+    Simulation only — the payment QR here is a placeholder pattern, not a real UPI code. The review QR is real and will open whatever link you enter above. Test it by scanning with your own phone.
+  </footer>
+
+<script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ReviewFlow Dashboard</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="/vendor/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">ReviewFlow <span class="badge">DEMO</span></div>
+    </header>
+
+    <main id="dashboardMain">
+      <section class="stat-row">
+        <div class="stat-card">
+          <div class="stat-num" id="statTotal">0</div>
+          <div class="stat-label">Total messages</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="statHappy">0</div>
+          <div class="stat-label">Happy</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="statNeutral">0</div>
+          <div class="stat-label">Neutral</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="statSad">0</div>
+          <div class="stat-label">Sad</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Sentiment split</h2>
+        <canvas id="sentimentChart" height="120"></canvas>
+      </section>
+
+      <section class="panel">
+        <h2>Trigger a review request (demo)</h2>
+        <div class="trigger-row">
+          <input id="triggerPhone" placeholder="+91XXXXXXXXXX" />
+          <input id="triggerName" placeholder="Customer name" />
+          <button id="triggerBtn">Send Review Request →</button>
+        </div>
+        <div id="triggerResult"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Recent conversations</h2>
+        <table id="recentTable">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Customer</th>
+              <th>Phone</th>
+              <th>Sentiment</th>
+              <th>Stage</th>
+              <th>Clicked?</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script src="dashboard.js"></script>
+  </body>
+</html>
