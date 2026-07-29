@@ -1,24 +1,16 @@
 /**
- * ⚠️ COMPLIANCE NOTE — read before reusing this outside a demo:
- * This bot's conversation flow (see src/services/sentiment.js and
- * src/routes/webhook.js) sends the Google review link ONLY to customers
- * detected as "happy", and routes "sad" customers to a private feedback
- * form instead — with no path to the public review link for them.
- *
- * This is "review gating," which Google's current review policy
- * explicitly prohibits. It was built this way on an explicit, informed
- * decision to match the original spec exactly, for a DEMO with mock data
- * only. Do NOT connect this to a real client's real WhatsApp number or
- * real Google Business Profile without first removing the gating (i.e.
- * making the Google link reachable regardless of sentiment) — doing so
- * risks review removal or profile restriction for that business.
+ * Conversation states for the state machine.
+ * AWAITING_REVIEW and AWAITING_FEEDBACK are intentionally removed — 
+ * the live flow uses the _CHOICE variants instead.
  */
 
 const STATES = {
   INIT: "INIT",
   AWAITING_RATING: "AWAITING_RATING",
-  AWAITING_REVIEW: "AWAITING_REVIEW",
-  AWAITING_FEEDBACK: "AWAITING_FEEDBACK",
+  AWAITING_REVIEW_CHOICE: "AWAITING_REVIEW_CHOICE",
+  AWAITING_FEEDBACK_CHOICE: "AWAITING_FEEDBACK_CHOICE",
+  AWAITING_ESCALATION: "AWAITING_ESCALATION",
+  AWAITING_DRAFT_CHOICE: "AWAITING_DRAFT_CHOICE",
   COMPLETED: "COMPLETED",
 };
 

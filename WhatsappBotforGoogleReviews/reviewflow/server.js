@@ -8,10 +8,12 @@ const redirectRoutes = require("./src/routes/redirect");
 
 const logger = require("./src/services/logger");
 const storage = require("./src/services/storage");
+const scheduler = require("./src/services/scheduler");
 const { MOCK_RECORDS } = require("./src/utils/mockData");
 const rateLimiter = require("./src/middleware/rateLimiter");
 const { sanitizeBodyStrings } = require("./src/middleware/validator");
 const errorHandler = require("./src/middleware/errorHandler");
+const connectDB = require("./src/config/database");
 
 const webhookRoutes = require("./src/routes/webhook");
 const dashboardRoutes = require("./src/routes/dashboard");
@@ -19,7 +21,6 @@ const apiRoutes = require("./src/routes/api");
 
 const app = express();
 
-// app.use(helmet());
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -51,19 +52,25 @@ app.use("/r", redirectRoutes);
 
 app.use(errorHandler);
 
-// Seed mock data once, so the dashboard has something to show immediately.
-storage.seedIfEmpty(MOCK_RECORDS);
+async function start() {
+  await connectDB();
+  await storage.seedIfEmpty(MOCK_RECORDS);
 
-const PORT = process.env.PORT || 3000;
-const server = app.listen(PORT, () => logger.info(`ReviewFlow running on http://localhost:${PORT}`));
+  scheduler.start();
 
-function shutdown(signal) {
-  logger.info(`${signal} received, shutting down gracefully...`);
-  server.close(() => {
-    logger.info("Server closed. Bye!");
-    process.exit(0);
-  });
-  setTimeout(() => process.exit(1), 8000).unref();
+  const PORT = process.env.PORT || 3000;
+  const server = app.listen(PORT, () => logger.info(`ReviewFlow running on http://localhost:${PORT}`));
+
+  function shutdown(signal) {
+    logger.info(`${signal} received, shutting down gracefully...`);
+    server.close(() => {
+      logger.info("Server closed. Bye!");
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 8000).unref();
+  }
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+
+start();

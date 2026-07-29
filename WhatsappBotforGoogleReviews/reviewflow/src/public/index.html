@@ -38,17 +38,73 @@
       </section>
 
       <section class="panel">
-        <h2>Trigger a review request (demo)</h2>
+        <h2>Method 1 — Manual Trigger (single customer)</h2>
         <div class="trigger-row">
-          <input id="triggerPhone" placeholder="+91XXXXXXXXXX" />
-          <input id="triggerName" placeholder="Customer name" />
-          <button id="triggerBtn">Send Review Request →</button>
+          <input id="manualName" placeholder="Customer name" />
+          <input id="manualPhone" placeholder="+91XXXXXXXXXX" />
+          <input id="manualItem" placeholder="Item (optional)" />
+          <button id="manualBtn" class="btn btn-primary">Add & Send →</button>
         </div>
-        <div id="triggerResult"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Method 2 — Database Batch Send</h2>
+        <p class="desc">Checks the Customer database for anyone who hasn't been messaged yet and sends them a welcome.</p>
+        <div class="trigger-row">
+          <button id="batchBtn" class="btn btn-primary">Run Batch Send →</button>
+          <button id="batchPreviewBtn" class="btn btn-secondary">Preview pending</button>
+        </div>
+        <div id="batchPreview" class="result-box hidden"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Method 3 — Excel Upload</h2>
+        <p class="desc">Upload an Excel file (.xlsx) with columns: Name, Phone, VisitDate, Notes, ReviewProvided</p>
+        <div class="trigger-row">
+          <input type="file" id="excelFile" accept=".xlsx,.xls" />
+          <button id="excelBtn" class="btn btn-primary">Upload & Process →</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Customer Management</h2>
+        <div class="crud-section">
+          <div class="crud-form">
+            <h3>Add Customer</h3>
+            <div class="trigger-row">
+              <input id="crudName" placeholder="Name" />
+              <input id="crudPhone" placeholder="Phone (e.g. 7499817978)" />
+              <input id="crudVisitDate" type="date" />
+              <button id="crudAddBtn" class="btn btn-primary">Add Customer</button>
+            </div>
+          </div>
+          <div class="crud-table">
+            <h3>All Customers <span id="customerCount" class="badge">0</span></h3>
+            <div class="table-wrap">
+              <table id="customerTable">
+                <thead>
+                  <tr><th>Name</th><th>Phone</th><th>Visit Date</th><th>Messaged?</th><th>Reviewed?</th><th>Actions</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div id="crudEditArea" class="hidden">
+              <h4>Edit Customer: <span id="editPhoneLabel"></span></h4>
+              <div class="trigger-row">
+                <input id="editName" placeholder="Name" />
+                <input id="editVisitDate" type="date" />
+                <label><input id="editReviewed" type="checkbox" /> Reviewed</label>
+                <button id="editSaveBtn" class="btn btn-primary">Save</button>
+                <button id="editCancelBtn" class="btn btn-secondary">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section class="panel">
         <h2>Recent conversations</h2>
+        <div class="table-wrap">
         <table id="recentTable">
           <thead>
             <tr>
@@ -61,8 +117,9 @@
               <th>Note</th>
             </tr>
           </thead>
-          <tbody></tbody>
+          <tbody>          </tbody>
         </table>
+        </div>
       </section>
     </main>
 

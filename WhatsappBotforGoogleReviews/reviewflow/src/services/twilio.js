@@ -25,6 +25,9 @@ function normalizePhone(raw) {
 
 async function sendWhatsApp(to, body) {
   const normalized = normalizePhone(to);
+  const baseUrl = process.env.BASE_URL || "";
+  const statusCallback = baseUrl ? `${baseUrl.replace(/\/+$/, "")}/webhook/status` : undefined;
+
   if (!isTwilioConfigured()) {
     logger.info(`[MOCK WHATSAPP SEND] -> ${normalized}\n${body}`);
     return { status: "sent", mock: true };
@@ -36,6 +39,7 @@ async function sendWhatsApp(to, body) {
       from,
       to: `whatsapp:${normalized}`,
       body,
+      ...(statusCallback && { statusCallback }),
     });
     return { status: "sent", sid: msg.sid, mock: false };
   } catch (err) {

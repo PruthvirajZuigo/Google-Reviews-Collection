@@ -4,10 +4,10 @@ const router = express.Router();
 const storage = require("../services/storage");
 const { DEMO_BUSINESS } = require("../config/constants");
 
-router.get("/:id", (req, res) => {
+router.get("/:id", async (req, res) => {
   const id = req.params.id;
 
-  const record = storage.markClicked(id);
+  const record = await storage.markClicked(id);
 
   console.log("Review Link Clicked:", id);
 

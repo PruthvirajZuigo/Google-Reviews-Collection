@@ -14,7 +14,7 @@ const NAMES = [
 
 const MOCK_RECORDS = NAMES.map((name, i) => {
   const sentiment = i % 3 === 0 ? SENTIMENTS.SAD : i % 3 === 1 ? SENTIMENTS.NEUTRAL : SENTIMENTS.HAPPY;
-  const state = sentiment === SENTIMENTS.SAD ? STATES.AWAITING_FEEDBACK : STATES.COMPLETED;
+  const state = sentiment === SENTIMENTS.SAD ? STATES.AWAITING_FEEDBACK_CHOICE : STATES.COMPLETED;
   return {
     id: `mock_${i + 1}`,
     createdAt: daysAgo(i % 7),
