@@ -5,3 +5,8 @@ data/*.json
 !data/.gitkeep
 *.zip
 test-*.xlsx
+
+reviewflowZip.zip
+ReviewFlow_Study_Guide.md
+ReviewFlow_Study_Guide_Addendum.md
+reviewflowData/
