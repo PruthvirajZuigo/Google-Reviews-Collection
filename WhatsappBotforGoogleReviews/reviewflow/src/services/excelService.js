@@ -1,4 +1,5 @@
 const XLSX = require("xlsx");
+const { normalizePhone } = require("./twilio");
 const logger = require("./logger");
 
 function parseExcel(buffer) {
@@ -12,17 +13,24 @@ function parseExcel(buffer) {
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const name = String(row.name || row.Name || row.NAME || "").trim();
-    const phone = String(row.phone || row.Phone || row.PHONE || row.mobile || row.Mobile || "").trim();
+    const phoneRaw = String(row.phone || row.Phone || row.PHONE || row.mobile || row.Mobile || "").trim();
     const visitDate = row.visitDate || row.VisitDate || row["visit date"] || row["Visit Date"] || "";
     const notes = String(row.notes || row.Notes || row.additionalNotes || row.AdditionalNotes || row.item || row.Item || "").trim();
-    const reviewProvided = !!(row.reviewProvided || row.ReviewProvided || row["review provided"] || row["Review Provided"] || false);
-    if (!name || !phone) {
+    const rp = row.reviewProvided ?? row.ReviewProvided ?? row["review provided"] ?? row["Review Provided"] ?? false;
+    const reviewProvided = typeof rp === "boolean" ? rp : typeof rp === "number" ? rp === 1 : ["yes", "true", "1"].includes(String(rp).toLowerCase());
+    if (!name || !phoneRaw) {
       errors.push({ row: i + 2, reason: "Missing name or phone", data: row });
+      continue;
+    }
+    const phone = normalizePhone(phoneRaw);
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length < 10) {
+      errors.push({ row: i + 2, reason: `Invalid phone: "${phoneRaw}" (${digits.length} digits)`, data: row });
       continue;
     }
     valid.push({
       name,
-      phone: phone.startsWith("+") ? phone : phone.startsWith("91") && phone.length === 12 ? `+${phone}` : `+91${phone}`,
+      phone,
       visitDate: visitDate ? new Date(visitDate) : new Date(),
       reviewProvided,
       additionalNotes: notes,
