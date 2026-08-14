@@ -2,10 +2,27 @@ const axios = require("axios");
 const Sentiment = require("sentiment");
 const logger = require("./logger");
 const { canUseAI, recordUse } = require("./aiBudget");
-const { SENTIMENTS, SENTIMENT_CACHE_TTL_MS, BUSINESS_FAQ } = require("../config/constants");
+const { SENTIMENTS, SENTIMENT_CACHE_TTL_MS } = require("../config/constants");
 
 const cache = new Map();
 const localAnalyzer = new Sentiment();
+
+/**
+ * Build the business-info block for an AI prompt from a client's config.
+ * Falls back to the legacy env-based FAQ for pre-multi-tenant calls.
+ */
+function buildBusinessFaq(client) {
+  const profile = client?.profile || {};
+  const hours = profile.businessHours || process.env.DEMO_BUSINESS_HOURS || "";
+  const offer = profile.offer || process.env.DEMO_BUSINESS_OFFER || "";
+  const manager = profile.managerWhatsapp || process.env.DEMO_MANAGER_WHATSAPP || "";
+  const parts = [];
+  if (hours) parts.push(`Business hours: ${hours}.`);
+  if (offer) parts.push(`Current offer: ${offer}.`);
+  if (manager && !manager.includes("XXXXXXXXXX")) parts.push(`Contact for anything else: ${manager}.`);
+  if (parts.length === 0) parts.push("Business hours: 9am-9pm, all days.");
+  return parts.join("\n");
+}
 
 async function callGroq(messages) {
   const { data } = await axios.post(
@@ -38,12 +55,12 @@ function localSentimentFallback(message) {
   return { sentiment, confidence: 0.5, intent: "local_fallback" };
 }
 
-async function analyzeSentiment(message, history) {
+async function analyzeSentiment(message, history, client) {
   const cacheKey = `sentiment:${message}`;
   const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.result;
 
-  if (!process.env.GROQ_API_KEY || !canUseAI()) return localSentimentFallback(message);
+  if (!process.env.GROQ_API_KEY || !canUseAI(client)) return localSentimentFallback(message);
 
   try {
     const past = history ? buildHistoryText(history) : "";
@@ -51,14 +68,14 @@ async function analyzeSentiment(message, history) {
     const text = await callGroq([
       {
         role: "system",
-        content: `You classify customer sentiment. Business info:${BUSINESS_FAQ}\nReply with exactly one word: happy, neutral, or sad.`
+        content: `You classify customer sentiment. Business info:${buildBusinessFaq(client)}\nReply with exactly one word: happy, neutral, or sad.`
       },
       {
         role: "user",
         content: `A customer replied to "how was your experience?" with: "${message}".${contextBlock}\nClassify the overall sentiment. Reply with only the word.`
       }
     ]);
-    recordUse();
+    recordUse(client);
     const lower = text.toLowerCase();
     const sentiment = lower.includes("happy") ? SENTIMENTS.HAPPY : lower.includes("sad") ? SENTIMENTS.SAD : SENTIMENTS.NEUTRAL;
     const result = { sentiment, confidence: 0.8, intent: "groq" };
@@ -71,20 +88,20 @@ async function analyzeSentiment(message, history) {
 }
 
 async function craftReply(message, stage, context = {}) {
-  if (!process.env.GROQ_API_KEY || !canUseAI()) return null;
+  const { businessName = "our business", item, history, client } = context;
+  if (!process.env.GROQ_API_KEY || !canUseAI(client)) return null;
 
-  const { businessName = "our business", item, history } = context;
   const itemLine = item ? ` They came in for: ${item}.` : "";
   const past = history ? buildHistoryText(history) : "";
   const historyBlock = past ? `\nFull conversation so far:\n${past}\n` : "";
 
   const stagePrompts = {
-    ask_good_followup: `You are a WhatsApp assistant for "${businessName}".${itemLine}\nBusiness info:${BUSINESS_FAQ}${historyBlock}A customer just said their experience was good: "${message}". Reply warmly in ONE short sentence (under 20 words, plain English), then ask what they liked most. Reply with only the message text.`,
-    ask_bad_followup: `You are a WhatsApp assistant for "${businessName}".${itemLine}\nBusiness info:${BUSINESS_FAQ}${historyBlock}A customer just said their experience was not good: "${message}". Reply with empathy in ONE short sentence (under 20 words, plain English), then ask them to describe what went wrong, right here in chat. Reply with only the message text.`,
-    close_good: `You are a WhatsApp assistant for "${businessName}".\nBusiness info:${BUSINESS_FAQ}${historyBlock}The customer just described what they liked: "${message}". Write ONE short, warm thank-you (under 20 words, plain English) that references something specific they mentioned. Do NOT include any link or ask for a review yourself — that will be added separately. Reply with only the message text.`,
-    close_bad: `You are a WhatsApp assistant for "${businessName}".\nBusiness info:${BUSINESS_FAQ}${historyBlock}The customer just described a problem: "${message}". Write ONE short, empathetic acknowledgment (under 20 words, plain English) referencing what they said, and reassure them the team will look into it. No links, no discounts. Reply with only the message text.`,
-    ask_improve_followup: `You are a WhatsApp assistant for "${businessName}".${itemLine}\nBusiness info:${BUSINESS_FAQ}${historyBlock}A customer's experience was just okay/neutral: "${message}". Reply in ONE short sentence (under 20 words, plain English) acknowledging that, then ask what we could do to make it better. Reply with only the message text.`,
-    close_neutral: `You are a WhatsApp assistant for "${businessName}".\nBusiness info:${BUSINESS_FAQ}${historyBlock}The customer just shared what could be improved: "${message}". Write ONE short, appreciative acknowledgment (under 20 words, plain English) referencing what they said, no links, no discounts. Reply with only the message text.`,
+    ask_good_followup: `You are a WhatsApp assistant for "${businessName}".${itemLine}\nBusiness info:${buildBusinessFaq(client)}${historyBlock}A customer just said their experience was good: "${message}". Reply warmly in ONE short sentence (under 20 words, plain English), then ask what they liked most. Reply with only the message text.`,
+    ask_bad_followup: `You are a WhatsApp assistant for "${businessName}".${itemLine}\nBusiness info:${buildBusinessFaq(client)}${historyBlock}A customer just said their experience was not good: "${message}". Reply with empathy in ONE short sentence (under 20 words, plain English), then ask them to describe what went wrong, right here in chat. Reply with only the message text.`,
+    close_good: `You are a WhatsApp assistant for "${businessName}".\nBusiness info:${buildBusinessFaq(client)}${historyBlock}The customer just described what they liked: "${message}". Write ONE short, warm thank-you (under 20 words, plain English) that references something specific they mentioned. Do NOT include any link or ask for a review yourself — that will be added separately. Reply with only the message text.`,
+    close_bad: `You are a WhatsApp assistant for "${businessName}".\nBusiness info:${buildBusinessFaq(client)}${historyBlock}The customer just described a problem: "${message}". Write ONE short, empathetic acknowledgment (under 20 words, plain English) referencing what they said, and reassure them the team will look into it. No links, no discounts. Reply with only the message text.`,
+    ask_improve_followup: `You are a WhatsApp assistant for "${businessName}".${itemLine}\nBusiness info:${buildBusinessFaq(client)}${historyBlock}A customer's experience was just okay/neutral: "${message}". Reply in ONE short sentence (under 20 words, plain English) acknowledging that, then ask what we could do to make it better. Reply with only the message text.`,
+    close_neutral: `You are a WhatsApp assistant for "${businessName}".\nBusiness info:${buildBusinessFaq(client)}${historyBlock}The customer just shared what could be improved: "${message}". Write ONE short, appreciative acknowledgment (under 20 words, plain English) referencing what they said, no links, no discounts. Reply with only the message text.`,
   };
 
   const prompt = stagePrompts[stage];
@@ -92,7 +109,7 @@ async function craftReply(message, stage, context = {}) {
 
   try {
     const reply = await callGroq([{ role: "user", content: prompt }]);
-    recordUse();
+    recordUse(client);
     return reply;
   } catch (err) {
     logger.error(`Groq reply generation failed (stage=${stage}):`, err.message);
@@ -100,12 +117,12 @@ async function craftReply(message, stage, context = {}) {
   }
 }
 
-async function extractFreeTextFeedback(message, sentiment, history) {
+async function extractFreeTextFeedback(message, sentiment, history, client) {
   const categories = sentiment === "happy"
     ? ["Staff/Service", "Food/Product", "Ambience/Location", "Everything"]
     : ["Staff behavior", "Food/Product quality", "Waiting time", "Something else"];
 
-  if (process.env.GROQ_API_KEY && canUseAI()) {
+  if (process.env.GROQ_API_KEY && canUseAI(client)) {
     try {
       const past = history ? buildHistoryText(history) : "";
       const contextBlock = past ? `\nContext: customer said "${message}". Prior chat:\n${past}\n` : "";
@@ -119,7 +136,7 @@ async function extractFreeTextFeedback(message, sentiment, history) {
           content: `Customer feedback: "${message}".${contextBlock}\nWhich category fits? Reply with only the category name.`
         }
       ]);
-      recordUse();
+      recordUse(client);
       const match = categories.find((c) => text.toLowerCase().includes(c.toLowerCase()));
       if (match) return match;
     } catch (err) {
@@ -141,8 +158,8 @@ async function extractFreeTextFeedback(message, sentiment, history) {
   return null;
 }
 
-async function generateDraft(feedback, sentiment, isDetailed) {
-  if (process.env.GROQ_API_KEY && canUseAI()) {
+async function generateDraft(feedback, sentiment, isDetailed, client) {
+  if (process.env.GROQ_API_KEY && canUseAI(client)) {
     try {
       const detailInstruction = isDetailed
         ? "Write a detailed 3-4 sentence Google review in first person. Be specific and elaborate using the customer's own words. Do not add anything they didn't mention. Reply with only the review text."
@@ -157,18 +174,18 @@ async function generateDraft(feedback, sentiment, isDetailed) {
           content: `A customer said: "${feedback}". Their overall tone is ${sentiment}.`
         }
       ]);
-      recordUse();
+      recordUse(client);
       return text;
     } catch (err) {
       logger.error("Groq generateDraft failed:", err.message);
     }
   }
-  return localDraft(feedback, sentiment, isDetailed);
+  return localDraft(feedback, sentiment, isDetailed, client);
 }
 
-function localDraft(feedback, sentiment, isDetailed) {
+function localDraft(feedback, sentiment, isDetailed, client) {
   const lower = feedback.toLowerCase();
-  const business = process.env.DEMO_BUSINESS_NAME || "Sharma Cafe Pune";
+  const business = client?.name || process.env.DEMO_BUSINESS_NAME || "Sharma Cafe Pune";
 
   const happyTemplates = {
     "staff|service|waiter|server|behaviour|behavior|help|friendly": isDetailed
@@ -225,8 +242,8 @@ function localDraft(feedback, sentiment, isDetailed) {
   return neutralTemplates[Math.floor(Math.random() * neutralTemplates.length)];
 }
 
-async function generateClosing(message, sentiment, conversationState, history) {
-  if (!process.env.GROQ_API_KEY || !canUseAI()) return null;
+async function generateClosing(message, sentiment, conversationState, history, client) {
+  if (!process.env.GROQ_API_KEY || !canUseAI(client)) return null;
 
   const past = history ? buildHistoryText(history) : "";
   const historyBlock = past ? `\nConversation history:\n${past}\n` : "";
@@ -234,28 +251,28 @@ async function generateClosing(message, sentiment, conversationState, history) {
     const text = await callGroq([
       {
         role: "system",
-        content: `Business info:${BUSINESS_FAQ}\nYou are a WhatsApp assistant closing a conversation naturally. Generate ONE short, warm sentence (under 15 words). Don't mention reviews or links — the customer has already completed the process. Just a natural conversation ender.`
+        content: `Business info:${buildBusinessFaq(client)}\nYou are a WhatsApp assistant closing a conversation naturally. Generate ONE short, warm sentence (under 15 words). Don't mention reviews or links — the customer has already completed the process. Just a natural conversation ender.`
       },
       {
         role: "user",
         content: `The customer's last message was: "${message}". Their overall sentiment was ${sentiment}. Current state: ${conversationState}.${historyBlock}Generate a natural closing line.`
       }
     ]);
-    recordUse();
+    recordUse(client);
     return text;
   } catch (err) {
     return null;
   }
 }
 
-async function understandOffMenuInput(message, stage, sentiment, history) {
-  if (!process.env.GROQ_API_KEY || !canUseAI()) return null;
+async function understandOffMenuInput(message, stage, sentiment, history, client) {
+  if (!process.env.GROQ_API_KEY || !canUseAI(client)) return null;
   const past = history ? buildHistoryText(history) : "";
   const historyBlock = past ? `\nConversation history:\n${past}\n` : "";
   const isCompleted = stage === "COMPLETED";
   const systemPrompt = isCompleted
-    ? `Business info:${BUSINESS_FAQ}\nA customer is sending a follow-up message after completing the review process. Read their message in context of the full conversation and respond naturally:`
-    : `Business info:${BUSINESS_FAQ}\nA customer sent an unexpected reply (not a valid number option). Read their message and decide: can you understand what they mean and respond naturally? If yes, generate a helpful response in under 20 words. If truly gibberish/unrelated, reply with exactly "UNRECOGNIZED".`;
+    ? `Business info:${buildBusinessFaq(client)}\nA customer is sending a follow-up message after completing the review process. Read their message in context of the full conversation and respond naturally:`
+    : `Business info:${buildBusinessFaq(client)}\nA customer sent an unexpected reply (not a valid number option). Read their message and decide: can you understand what they mean and respond naturally? If yes, generate a helpful response in under 20 words. If truly gibberish/unrelated, reply with exactly "UNRECOGNIZED".`;
   try {
     const text = await callGroq([
       {
@@ -267,7 +284,7 @@ async function understandOffMenuInput(message, stage, sentiment, history) {
         content: `Current stage: ${stage}. Customer's overall sentiment: ${sentiment}. Their message: "${message}".${historyBlock}`
       }
     ]);
-    recordUse();
+    recordUse(client);
     if (text === "UNRECOGNIZED") return null;
     return text;
   } catch (err) {

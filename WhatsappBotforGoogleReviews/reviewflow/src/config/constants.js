@@ -11,6 +11,7 @@ const STATES = {
   AWAITING_FEEDBACK_CHOICE: "AWAITING_FEEDBACK_CHOICE",
   AWAITING_ESCALATION: "AWAITING_ESCALATION",
   AWAITING_DRAFT_CHOICE: "AWAITING_DRAFT_CHOICE",
+  AWAITING_REVIEW_CONFIRM: "AWAITING_REVIEW_CONFIRM",
   COMPLETED: "COMPLETED",
 };
 
@@ -29,8 +30,22 @@ const DEMO_BUSINESS = {
 const BUSINESS_FAQ = `
 Business hours: 9am-9pm, all days.
 Current offer: 10% off on weekday lunches.
-Contact for anything else: +91XXXXXXXXXX.
+${DEMO_BUSINESS.managerWhatsapp && !DEMO_BUSINESS.managerWhatsapp.includes("XXXXXXXXXX")
+  ? `Contact for anything else: ${DEMO_BUSINESS.managerWhatsapp}.`
+  : "Contact for anything else: ask the staff when you visit."}
 `;
 module.exports = { ...module.exports, BUSINESS_FAQ };
 
-module.exports = { STATES, SENTIMENTS, STATE_TTL_MS, SENTIMENT_CACHE_TTL_MS, DEMO_BUSINESS, BUSINESS_FAQ };
+/**
+ * Content SIDs for the Twilio "twilio/list-picker" interactive templates.
+ * Set the env vars once the templates are created in the Twilio Console
+ * (see docs/twilio-content-templates.md). Empty string = template not
+ * configured yet → the bot gracefully falls back to plain-text menus.
+ */
+const CONTENT_TEMPLATES = {
+  reviewOptions: process.env.TWILIO_CONTENT_SID_REVIEW_OPTIONS || "",
+  feedbackSad: process.env.TWILIO_CONTENT_SID_FEEDBACK_SAD || "",
+  feedbackNeutral: process.env.TWILIO_CONTENT_SID_FEEDBACK_NEUTRAL || "",
+};
+
+module.exports = { STATES, SENTIMENTS, STATE_TTL_MS, SENTIMENT_CACHE_TTL_MS, DEMO_BUSINESS, BUSINESS_FAQ, CONTENT_TEMPLATES };

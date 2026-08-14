@@ -1,6 +1,19 @@
 const logger = require("./logger");
 
+const TWILIO_TIMEOUT_MS = Number(process.env.TWILIO_TIMEOUT_MS) || 8000;
+
+function withTimeout(promise, ms) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Twilio request timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 function isTwilioConfigured() {
+  // TWILIO_MOCK=true forces mock sends (nothing leaves the system) so you can
+  // test multiple clients, batch sends and the cron without using Twilio quota.
+  if (process.env.TWILIO_MOCK === "true") return false;
   return Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
 }
 
@@ -35,15 +48,64 @@ async function sendWhatsApp(to, body) {
   try {
     const client = getClient();
     const from = process.env.TWILIO_WHATSAPP_FROM || "whatsapp:+14155238886";
-    const msg = await client.messages.create({
-      from,
-      to: `whatsapp:${normalized}`,
-      body,
-      ...(statusCallback && { statusCallback }),
-    });
+    const msg = await withTimeout(
+      client.messages.create({
+        from,
+        to: `whatsapp:${normalized}`,
+        body,
+        ...(statusCallback && { statusCallback }),
+      }),
+      TWILIO_TIMEOUT_MS
+    );
     return { status: "sent", sid: msg.sid, mock: false };
   } catch (err) {
     logger.error("Twilio send failed:", err.message);
+    return { status: "failed", error: err.message, mock: false };
+  }
+}
+
+/**
+ * Sends a WhatsApp interactive "list picker" message via the Twilio Content
+ * API (a `twilio/list-picker` Content Template). The list items are defined
+ * inside the Content Template itself — the template is matched by contentSid.
+ *
+ * Falls back to a plain text message (bodyText) when:
+ *   - Twilio is not configured (mock/dev mode), or
+ *   - No contentSid is provided (the template hasn't been created yet).
+ * This keeps the bot fully functional until the client creates the templates.
+ */
+async function sendInteractiveList(to, bodyText, contentSid, contentVariables) {
+  const normalized = normalizePhone(to);
+  const from = process.env.TWILIO_WHATSAPP_FROM || "whatsapp:+14155238886";
+  // The WhatsApp Sandbox does NOT support Content Templates / list-pickers —
+  // sending with a contentSid from the sandbox fails delivery. Only use the
+  // interactive path once a production WhatsApp sender is configured.
+  const IS_SANDBOX = from.includes("+14155238886");
+
+  if (!isTwilioConfigured()) {
+    logger.info(`[MOCK WHATSAPP LIST] -> ${normalized}\n${bodyText}`);
+    return { status: "sent", mock: true };
+  }
+  try {
+    const client = getClient();
+    if (!contentSid || IS_SANDBOX) {
+      const msg = await withTimeout(client.messages.create({ from, to: `whatsapp:${normalized}`, body: bodyText }), TWILIO_TIMEOUT_MS);
+      return { status: "sent", sid: msg.sid, mock: false };
+    }
+    const msg = await withTimeout(
+      client.messages.create({
+        from,
+        to: `whatsapp:${normalized}`,
+        contentSid,
+        ...(contentVariables && typeof contentVariables === "object" && Object.keys(contentVariables).length
+          ? { contentVariables: JSON.stringify(contentVariables) }
+          : {}),
+      }),
+      TWILIO_TIMEOUT_MS
+    );
+    return { status: "sent", sid: msg.sid, mock: false };
+  } catch (err) {
+    logger.error("Twilio list send failed:", err.message);
     return { status: "failed", error: err.message, mock: false };
   }
 }
@@ -61,4 +123,4 @@ function validateSignature(req) {
   }
 }
 
-module.exports = { sendWhatsApp, validateSignature, isTwilioConfigured, normalizePhone };
+module.exports = { sendWhatsApp, sendInteractiveList, validateSignature, isTwilioConfigured, normalizePhone };

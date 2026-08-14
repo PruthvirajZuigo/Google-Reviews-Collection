@@ -4,7 +4,6 @@
  * conversation is generated live by huggingface.js. Kept in plain
  * English per the current design.
  */
-const { DEMO_BUSINESS } = require("../config/constants");
 
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -82,6 +81,19 @@ const DRAFT_OPTION = `Would you like me to write a quick Google review draft bas
 
 const FOLLOWUP_REENGAGEMENT = `Hi again! 👋 It's been a while — we'd love to hear about your recent experience.`;
 
+const REVIEW_CONFIRM_PROMPT = `Hope you had a great time! 😊
+Did you get a chance to post your Google review?
+
+Reply with a number:
+1️⃣ Yes, I posted it 🙌
+2️⃣ Not yet`;
+
+const REVIEW_CONFIRM_THANKS = `Thank you so much! 🙏 Your review really helps our small business. We appreciate you! ❤️`;
+
+const REVIEW_CONFIRM_NOT_YET = (link) => `No problem! Take your time — you can post it anytime using this link:
+\n${link}\n
+Once you're done, just reply 1️⃣ and we'll mark it. 🙂`;
+
 const REVIEW_OPTION_LABELS = { 1: "Staff/Service", 2: "Food/Product", 3: "Ambience/Location", 4: "Everything" };
 const FEEDBACK_OPTION_LABELS = { 1: "Staff behavior", 2: "Food/Product quality", 3: "Waiting time", 4: "Something else" };
 const ESCALATION_OPTION_LABELS = { 1: "Contact me", 2: "Just noting" };
@@ -97,7 +109,7 @@ const CLOSING_VARIANTS = [
   "You're welcome! Don't hesitate to reach out if you need anything.",
   "Happy to help! Enjoy the rest of your day.",
   "Anytime! We're here if you have more questions.",
-  "Take care and see you at Sharma Cafe next time!",
+  "Take care and see you next time!",
   "Thanks for your time and feedback — it means a lot!",
   "Have a wonderful day ahead! Looking forward to serving you again.",
 ];
@@ -139,6 +151,9 @@ module.exports = {
   escalationOptions: () => ESCALATION_OPTIONS,
   draftOption: () => DRAFT_OPTION,
   followupReengagement: () => FOLLOWUP_REENGAGEMENT,
+  reviewConfirmPrompt: () => REVIEW_CONFIRM_PROMPT,
+  reviewConfirmThanks: () => REVIEW_CONFIRM_THANKS,
+  reviewConfirmNotYet: (link) => REVIEW_CONFIRM_NOT_YET(link),
   REVIEW_OPTION_LABELS,
   FEEDBACK_OPTION_LABELS,
   ESCALATION_OPTION_LABELS,

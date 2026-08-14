@@ -1,0 +1,42 @@
+# Client template for the ReviewFlow platform.
+# Copy this file, fill in the business details, then create the client via the
+# Admin panel ("Upload YAML template"). Everything here becomes a Client record
+# in MongoDB — this file is only a seed/template, the DB is the live config.
+#
+# `clientId` is optional: leave it out and the system generates one automatically.
+
+name: Sharma Cafe Pune                      # Business name shown to customers
+# clientId: cli_mycafe                      # optional unique slug (letters, numbers, _-)
+
+profile:
+  googleReviewUrl: https://search.google.com/local/writereview?placeid=ChIJP0warDDowokRfvXMkBqL5Cg
+  feedbackFormUrl: ""                       # optional feedback form link
+  managerWhatsapp: +917499817978            # manager's WhatsApp for escalations
+  businessHours: 9am-9pm, all days
+  offer: 10% off on weekday lunches
+
+scheduler:
+  batchTime: "12:30"                        # daily batch time (HH:mm, 24h local)
+  confirmDelayMinutes: 30                   # "Did you post your review?" nudge delay
+  protectionDays: 7                         # skip re-messaging recent link recipients
+
+features:
+  testLab: true                             # owner-only testing tool — false for real clients
+  dashboard: true
+  excelUpload: true
+  manualTrigger: true
+  recordsHistory: true
+  businessFaq: true
+
+llm:
+  provider: groq
+  model: ""                                 # empty = platform default model
+  temperature: 0.7
+  maxTokens: 300
+  dailyBudgetCalls: 50                      # AI calls/day cap for this client
+
+compliance:
+  requireOptIn: true                         # collect consent before first message
+  handleStop: true                           # honour STOP/opt-out requests
+  aiMode: full                               # "full" | "rules-only" | "rules+sentiment"
+  throttlePerHour: 0                         # 0 = no throttle (messages/hour)

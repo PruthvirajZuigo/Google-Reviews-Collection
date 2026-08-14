@@ -24,7 +24,12 @@ body { margin: 0; font-family: 'Inter', 'Segoe UI', Roboto, sans-serif; backgrou
 /* Topbar */
 .topbar { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: white; padding: 16px 28px; display: flex; align-items: center; gap: 14px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
 .brand { font-weight: 800; font-size: 1.1rem; letter-spacing: -.3px; }
+.topnav { margin-left: auto; display: flex; gap: 4px; }
+.topnav a { color: rgba(255,255,255,.7); text-decoration: none; padding: 6px 14px; border-radius: 8px; font-size: .82rem; font-weight: 600; transition: all .15s; }
+.topnav a:hover { color: #fff; background: rgba(255,255,255,.08); }
+.topnav a.active { color: #fff; background: rgba(255,255,255,.14); }
 .badge { background: var(--yellow); color: #3a2f00; font-size: .6rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; margin-left: 6px; text-transform: uppercase; letter-spacing: .4px; }
+label.check { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--ink-soft); background: var(--paper); padding: 8px 12px; border-radius: 8px; cursor: pointer; }
 
 main { max-width: 960px; margin: 0 auto; padding: 28px 20px 60px; }
 
@@ -116,3 +121,51 @@ input[type="file"] { font-size: .82rem; padding: 8px 0; }
 .modal-box p { margin: 0 0 20px; color: var(--ink-soft); font-size: .85rem; line-height: 1.5; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* Login */
+.login-box { max-width: 360px; }
+.login-box h3 { font-size: 1.15rem; }
+.login-hint { font-size: .78rem !important; }
+.login-form { display: flex; flex-direction: column; gap: 10px; }
+.login-form input { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: .9rem; }
+.login-error { color: var(--red); font-size: .8rem; }
+.badge-admin { background: var(--blue-bg); color: #1e40af; }
+.badge-client { background: #d1fae5; color: #065f46; }
+
+/* Test Lab */
+.test-scenarios { margin-bottom: 16px; }
+.test-scenarios .trigger-row { margin-top: 8px; }
+.test-scenarios .scenario-btn { padding: 8px 12px; font-size: .78rem; border-radius: 999px; }
+.test-layout { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }
+.test-side h3 { font-size: .85rem; margin: 12px 0 8px; color: var(--ink-soft); }
+.session-list { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; margin-bottom: 10px; }
+.session-chip { text-align: left; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); cursor: pointer; font-size: .78rem; transition: all .15s; }
+.session-chip:hover { border-color: var(--blue); }
+.session-chip.active { background: var(--green); color: #06251c; border-color: var(--green); font-weight: 600; }
+.session-chip .chip-phone { display: block; font-family: monospace; font-size: .85rem; }
+.session-chip .chip-meta { display: block; opacity: .65; font-size: .7rem; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-window { height: 420px; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; background: #f7f8fa; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.chat-empty { color: var(--ink-soft); font-size: .82rem; text-align: center; margin: auto; }
+.bubble { max-width: 78%; padding: 9px 13px; border-radius: 14px; font-size: .82rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+.bubble.customer { align-self: flex-end; background: var(--green); color: #06251c; border-bottom-right-radius: 4px; }
+.bubble.bot { align-self: flex-start; background: #fff; border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.bubble .bubble-tag { display: block; font-size: .62rem; opacity: .55; margin-top: 5px; font-family: monospace; }
+@media (max-width: 760px) { .test-layout { grid-template-columns: 1fr; } }
+
+/* Admin panel */
+.cell-actions { white-space: nowrap; }
+.cell-actions button { margin-right: 4px; }
+.cell-url a { color: var(--blue); text-decoration: none; font-weight: 600; }
+.cell-url a:hover { text-decoration: underline; }
+td code { background: var(--paper); padding: 2px 6px; border-radius: 5px; font-size: .75rem; }
+#clientEditArea { background: var(--blue-bg); border: 1px solid #bfdbfe; border-radius: 8px; padding: 16px; margin-top: 12px; }
+#clientEditArea h4 { margin: 0 0 10px; font-size: .85rem; color: #1e40af; }
+select { padding: 10px 14px; border-radius: 8px; border: 1px solid var(--line); font-size: .85rem; background: #fafafa; outline: none; }
+select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
+
+/* Tabs */
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+.tab-btn { appearance: none; background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 8px 8px 0 0; padding: 10px 18px; font-size: .85rem; font-weight: 600; color: var(--ink-soft); cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
+.tab-btn:hover { color: var(--ink); background: rgba(0,0,0,.03); }
+.tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); background: var(--blue-bg); }
+.tab-panel { animation: fadeIn .15s ease; }

@@ -3,126 +3,190 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ReviewFlow Dashboard</title>
-    <link rel="stylesheet" href="style.css" />
+    <title>Zuigo Dashboard</title>
+    <link rel="stylesheet" href="/style.css?v=4" />
     <script src="/vendor/chart.umd.min.js"></script>
   </head>
   <body>
     <header class="topbar">
-      <div class="brand">ReviewFlow <span class="badge">DEMO</span></div>
+      <div class="brand">Zuigo <span class="badge">DEMO</span></div>
+      <nav class="topnav">
+        <span id="clientSelectorWrap">
+          <select id="clientSelector" title="Switch business / client" style="max-width:220px">
+            <option value="">All clients</option>
+          </select>
+        </span>
+        <a href="/api/admin" id="adminLink">Admin</a>
+      </nav>
     </header>
 
+    <div id="clientBanner" class="hidden" style="background:var(--blue-bg);color:#1e40af;padding:8px 28px;font-size:.8rem;border-bottom:1px solid #bfdbfe">
+      Showing dashboard for <strong id="clientBannerName">…</strong>
+    </div>
+
     <main id="dashboardMain">
-      <section class="stat-row">
-        <div class="stat-card">
-          <div class="stat-num" id="statTotal">0</div>
-          <div class="stat-label">Total messages</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-num" id="statHappy">0</div>
-          <div class="stat-label">Happy</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-num" id="statNeutral">0</div>
-          <div class="stat-label">Neutral</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-num" id="statSad">0</div>
-          <div class="stat-label">Sad</div>
-        </div>
-      </section>
+      <nav class="tabs" id="mainTabs">
+        <button type="button" class="tab-btn active" data-tab="overview">Overview</button>
+        <button type="button" class="tab-btn" data-tab="customers">Customers</button>
+        <button type="button" class="tab-btn" data-tab="send">Send</button>
+        <button type="button" class="tab-btn" data-tab="testlab" id="tabBtnTestLab">Test Lab</button>
+      </nav>
 
-      <section class="panel">
-        <h2>Sentiment split</h2>
-        <canvas id="sentimentChart" height="120"></canvas>
-      </section>
-
-      <section class="panel">
-        <h2>Method 1 — Manual Trigger (single customer)</h2>
-        <div class="trigger-row">
-          <input id="manualName" placeholder="Customer name" />
-          <input id="manualPhone" placeholder="+91XXXXXXXXXX" />
-          <input id="manualItem" placeholder="Item (optional)" />
-          <button id="manualBtn" class="btn btn-primary">Add & Send →</button>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>Method 2 — Database Batch Send</h2>
-        <p class="desc">Checks the Customer database for anyone who hasn't been messaged yet and sends them a welcome.</p>
-        <div class="trigger-row">
-          <button id="batchBtn" class="btn btn-primary">Run Batch Send →</button>
-          <button id="batchPreviewBtn" class="btn btn-secondary">Preview pending</button>
-        </div>
-        <div id="batchPreview" class="result-box hidden"></div>
-      </section>
-
-      <section class="panel">
-        <h2>Method 3 — Excel Upload</h2>
-        <p class="desc">Upload an Excel file (.xlsx) with columns: Name, Phone, VisitDate, Notes, ReviewProvided</p>
-        <div class="trigger-row">
-          <input type="file" id="excelFile" accept=".xlsx,.xls" />
-          <button id="excelBtn" class="btn btn-primary">Upload & Process →</button>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>Customer Management</h2>
-        <div class="crud-section">
-          <div class="crud-form">
-            <h3>Add Customer</h3>
-            <div class="trigger-row">
-              <input id="crudName" placeholder="Name" />
-              <input id="crudPhone" placeholder="Phone (e.g. 7499817978)" />
-              <input id="crudVisitDate" type="date" />
-              <button id="crudAddBtn" class="btn btn-primary">Add Customer</button>
-            </div>
+      <section class="tab-panel" data-panel="overview">
+        <section class="stat-row">
+          <div class="stat-card">
+            <div class="stat-num" id="statTotal">0</div>
+            <div class="stat-label">Total messages</div>
           </div>
-          <div class="crud-table">
-            <h3>All Customers <span id="customerCount" class="badge">0</span></h3>
-            <div class="table-wrap">
-              <table id="customerTable">
-                <thead>
-                  <tr><th>Name</th><th>Phone</th><th>Visit Date</th><th>Messaged?</th><th>Reviewed?</th><th>Actions</th></tr>
-                </thead>
-                <tbody></tbody>
-              </table>
-            </div>
-            <div id="crudEditArea" class="hidden">
-              <h4>Edit Customer: <span id="editPhoneLabel"></span></h4>
+          <div class="stat-card">
+            <div class="stat-num" id="statHappy">0</div>
+            <div class="stat-label">Happy</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="statNeutral">0</div>
+            <div class="stat-label">Neutral</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="statSad">0</div>
+            <div class="stat-label">Sad</div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Sentiment split</h2>
+          <canvas id="sentimentChart" height="120"></canvas>
+        </section>
+
+        <section class="panel">
+          <h2>Recent conversations</h2>
+          <div class="table-wrap">
+          <table id="recentTable">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Customer</th>
+                <th>Phone</th>
+                <th>Sentiment</th>
+                <th>Stage</th>
+                <th>Clicked?</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody>          </tbody>
+          </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="tab-panel hidden" data-panel="customers">
+        <section class="panel">
+          <h2>Customer Management</h2>
+          <div class="crud-section">
+            <div class="crud-form">
+              <h3>Add Customer</h3>
               <div class="trigger-row">
-                <input id="editName" placeholder="Name" />
-                <input id="editVisitDate" type="date" />
-                <label><input id="editReviewed" type="checkbox" /> Reviewed</label>
-                <button id="editSaveBtn" class="btn btn-primary">Save</button>
-                <button id="editCancelBtn" class="btn btn-secondary">Cancel</button>
+                <input id="crudName" placeholder="Name" />
+                <input id="crudPhone" placeholder="Phone (e.g. 7499817978)" />
+                <input id="crudVisitDate" type="date" />
+                <button id="crudAddBtn" class="btn btn-primary">Add Customer</button>
+              </div>
+            </div>
+            <div class="crud-table">
+              <h3>All Customers <span id="customerCount" class="badge">0</span></h3>
+              <div class="table-wrap">
+                <table id="customerTable">
+                  <thead>
+                    <tr><th>Name</th><th>Phone</th><th>Visit Date</th><th>Messaged?</th><th>Reviewed?</th><th>Actions</th></tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <div style="margin-top:10px">
+                <button id="clearAllBtn" class="btn btn-danger">Clear All Data</button>
+                <span style="font-size:0.75rem;color:var(--ink-soft);margin-left:8px">Deletes all customers, conversations, and records</span>
+              </div>
+              <div id="crudEditArea" class="hidden">
+                <h4>Edit Customer: <span id="editPhoneLabel"></span></h4>
+                <div class="trigger-row">
+                  <input id="editName" placeholder="Name" />
+                  <input id="editVisitDate" type="date" />
+                  <label><input id="editReviewed" type="checkbox" /> Reviewed</label>
+                  <button id="editSaveBtn" class="btn btn-primary">Save</button>
+                  <button id="editCancelBtn" class="btn btn-secondary">Cancel</button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </section>
       </section>
 
-      <section class="panel">
-        <h2>Recent conversations</h2>
-        <div class="table-wrap">
-        <table id="recentTable">
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Customer</th>
-              <th>Phone</th>
-              <th>Sentiment</th>
-              <th>Stage</th>
-              <th>Clicked?</th>
-              <th>Note</th>
-            </tr>
-          </thead>
-          <tbody>          </tbody>
-        </table>
-        </div>
+      <section class="tab-panel hidden" data-panel="send">
+        <section class="panel">
+          <h2>Send Now</h2>
+          <p class="desc">Send a welcome message to one customer immediately.</p>
+          <div class="trigger-row">
+            <input id="manualName" placeholder="Customer name" />
+            <input id="manualPhone" placeholder="+91XXXXXXXXXX" />
+            <input id="manualItem" placeholder="Item (optional)" />
+            <button id="manualBtn" class="btn btn-primary">Add & Send →</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Batch Send</h2>
+          <p class="desc">Contacts every pending customer in the database who hasn't been messaged yet and sends them a welcome.</p>
+          <div class="trigger-row">
+            <button id="batchBtn" class="btn btn-primary">Run Batch Send →</button>
+            <button id="batchPreviewBtn" class="btn btn-secondary">Preview pending</button>
+          </div>
+          <div id="batchPreview" class="result-box hidden"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Excel Import</h2>
+          <p class="desc">Bulk-import customers and message them. Columns: Name, Phone, VisitDate, Notes, ReviewProvided</p>
+          <div class="trigger-row">
+            <input type="file" id="excelFile" accept=".xlsx,.xls" />
+            <button id="excelBtn" class="btn btn-primary">Upload & Process →</button>
+          </div>
+        </section>
+      </section>
+
+      <section class="tab-panel hidden" data-panel="testlab" id="panelTestLab">
+        <section class="panel">
+          <h2>Test Lab — Free Simulator</h2>
+          <p class="desc">Unlimited free testing that runs the real bot logic without sending any WhatsApp/Twilio messages. Simulate a whole conversation for any phone number, or run preset scenarios. Test data never appears in the dashboard stats.</p>
+
+          <div class="test-scenarios">
+            <strong>Scenario presets:</strong>
+            <div id="testLabScenarios" class="trigger-row"></div>
+          </div>
+
+          <div class="test-layout">
+            <div class="test-side">
+              <h3>Open a chat</h3>
+              <div class="trigger-row">
+                <input id="testLabNewPhone" placeholder="+91XXXXXXXXXX" />
+                <button id="testLabNewBtn" class="btn btn-primary">Open →</button>
+              </div>
+              <h3>Sessions <button id="testLabClearBtn" class="btn btn-danger" style="float:right;padding:4px 10px;font-size:.7rem">Clear all</button></h3>
+              <div id="testLabSessions" class="session-list"></div>
+              <button id="testLabResetBtn" class="btn btn-danger hidden">Reset this chat</button>
+            </div>
+            <div class="test-main">
+              <div id="testLabChat" class="chat-window"></div>
+              <div class="trigger-row">
+                <input id="testLabMsg" placeholder="Type as the customer… (Enter to send)" />
+                <button id="testLabSendBtn" class="btn btn-primary">Send</button>
+              </div>
+              <div id="testLabState" class="result-box hidden"></div>
+            </div>
+          </div>
+        </section>
       </section>
     </main>
 
-    <script src="dashboard.js"></script>
+    <script src="/auth.js?v=4"></script>
+    <script src="/dashboard.js?v=4"></script>
   </body>
 </html>

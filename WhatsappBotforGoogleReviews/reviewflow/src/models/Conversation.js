@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const conversationSchema = new mongoose.Schema({
   phone: { type: String, required: true, unique: true, index: true },
+  clientId: { type: String, index: true },
   state: { type: String, default: "INIT" },
   customerName: { type: String, default: "Customer" },
   sentiment: { type: String },
@@ -14,9 +15,8 @@ const conversationSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
 });
 
-conversationSchema.pre("save", function (next) {
+conversationSchema.pre("save", function () {
   this.updatedAt = new Date();
-  next();
 });
 
 module.exports = mongoose.model("Conversation", conversationSchema);
