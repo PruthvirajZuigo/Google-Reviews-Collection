@@ -20,22 +20,6 @@ const SENTIMENTS = { HAPPY: "happy", NEUTRAL: "neutral", SAD: "sad" };
 const STATE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const SENTIMENT_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-const DEMO_BUSINESS = {
-  name: process.env.DEMO_BUSINESS_NAME || "Sharma Cafe Pune",
-  googleReviewUrl: process.env.DEMO_GOOGLE_REVIEW_URL || "https://g.page/sharma-cafe-pune/review",
-  feedbackFormUrl: process.env.DEMO_FEEDBACK_FORM_URL || "https://forms.gle/demo-feedback-form",
-  managerWhatsapp: process.env.DEMO_MANAGER_WHATSAPP || "+91XXXXXXXXXX",
-};
-
-const BUSINESS_FAQ = `
-Business hours: 9am-9pm, all days.
-Current offer: 10% off on weekday lunches.
-${DEMO_BUSINESS.managerWhatsapp && !DEMO_BUSINESS.managerWhatsapp.includes("XXXXXXXXXX")
-  ? `Contact for anything else: ${DEMO_BUSINESS.managerWhatsapp}.`
-  : "Contact for anything else: ask the staff when you visit."}
-`;
-module.exports = { ...module.exports, BUSINESS_FAQ };
-
 /**
  * Content SIDs for the Twilio "twilio/list-picker" interactive templates.
  * Set the env vars once the templates are created in the Twilio Console
@@ -48,4 +32,4 @@ const CONTENT_TEMPLATES = {
   feedbackNeutral: process.env.TWILIO_CONTENT_SID_FEEDBACK_NEUTRAL || "",
 };
 
-module.exports = { STATES, SENTIMENTS, STATE_TTL_MS, SENTIMENT_CACHE_TTL_MS, DEMO_BUSINESS, BUSINESS_FAQ, CONTENT_TEMPLATES };
+module.exports = { STATES, SENTIMENTS, STATE_TTL_MS, SENTIMENT_CACHE_TTL_MS, CONTENT_TEMPLATES };

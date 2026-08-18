@@ -89,7 +89,7 @@ async function getRecentHistory(phone, limit = 4, clientId) {
       .lean();
     return records.reverse().map((r) => ({
       role: r.triggerSource === "webhook" ? "customer" : "bot",
-      text: r.feedbackText || r.choice || "",
+      text: r.feedbackText || "",
       sentiment: r.sentiment,
     })).filter((r) => r.text);
   } catch (err) {
@@ -143,7 +143,9 @@ async function adoptCustomerByPhone(phone, { clientId, name }) {
 
 async function createCustomer(data) {
   try {
-    const doc = await Customer.create(data);
+    // Normalize every phone to E.164 (+91...) so the same number can't be
+    // stored twice in different formats (e.g. "9812345678" vs "+919812345678").
+    const doc = await Customer.create({ ...data, phone: normalizeStoredPhone(data.phone) });
     return doc.toObject();
   } catch (err) {
     logger.error("Failed to create customer:", err.message);
@@ -167,8 +169,7 @@ async function findCustomersToContact(clientId, opts = {}) {
       // Don't re-message someone who recently got the review link — they may be
       // about to (or have just) posted their review.
       if (c.reviewLinkSentAt && Date.now() - new Date(c.reviewLinkSentAt).getTime() < protectionMs) continue;
-      const normalized = c.phone.startsWith("+") ? c.phone : c.phone.length === 10 ? `+91${c.phone}` : c.phone;
-      const waPhone = `whatsapp:${normalized}`;
+      const waPhone = `whatsapp:${normalizeStoredPhone(c.phone)}`;
       const convo = await Conversation.findOne({ phone: waPhone }).lean();
       const isExpired = convo && convo.expiresAt && new Date(convo.expiresAt).getTime() < Date.now();
       if (!convo || isExpired) {
@@ -238,7 +239,7 @@ async function setCustomerReviewText(phone, clientId, text) {
 
 async function deleteCustomer(phone, clientId) {
   try {
-    const normalized = phone.startsWith("+") ? phone : phone.length === 10 ? `+91${phone}` : phone;
+    const normalized = normalizeStoredPhone(phone);
     const waPhone = `whatsapp:${normalized}`;
     const result = await Customer.deleteOne({ $and: [{ $or: [{ phone }, { phone: normalized }] }, buildClientFilter(clientId)] });
     if (result.deletedCount === 0) {
@@ -257,7 +258,7 @@ async function deleteCustomer(phone, clientId) {
 
 async function updateCustomer(phone, data, clientId) {
   try {
-    const normalized = phone.startsWith("+") ? phone : phone.length === 10 ? `+91${phone}` : phone;
+    const normalized = normalizeStoredPhone(phone);
     const doc = await Customer.findOneAndUpdate(
       { $and: [{ $or: [{ phone }, { phone: normalized }] }, buildClientFilter(clientId)] },
       { $set: { ...data, updatedAt: new Date() } },
@@ -272,7 +273,7 @@ async function updateCustomer(phone, data, clientId) {
 
 async function findCustomerByPhone(phone, clientId) {
   try {
-    const normalized = phone.startsWith("+") ? phone : phone.length === 10 ? `+91${phone}` : phone;
+    const normalized = normalizeStoredPhone(phone);
     return await Customer.findOne({
       $and: [{ $or: [{ phone }, { phone: normalized }] }, buildClientFilter(clientId)],
     }).lean();

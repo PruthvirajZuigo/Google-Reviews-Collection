@@ -110,36 +110,6 @@ async function analyzeSentiment(message, history, client) {
   }
 }
 
-async function craftReply(message, stage, context = {}) {
-  const { businessName = "our business", item, history, client } = context;
-  if (!process.env.GROQ_API_KEY || !canUseAI(client) || clientAiLevel(client) !== "full") return null;
-
-  const itemLine = item ? ` They came in for: ${item}.` : "";
-  const past = history ? buildHistoryText(history) : "";
-  const historyBlock = past ? `\nFull conversation so far:\n${past}\n` : "";
-
-  const stagePrompts = {
-    ask_good_followup: `You are a WhatsApp assistant for "${businessName}".${itemLine}\nBusiness info:${buildBusinessFaq(client)}${historyBlock}A customer just said their experience was good: "${message}". Reply warmly in ONE short sentence (under 20 words, plain English), then ask what they liked most. Reply with only the message text.`,
-    ask_bad_followup: `You are a WhatsApp assistant for "${businessName}".${itemLine}\nBusiness info:${buildBusinessFaq(client)}${historyBlock}A customer just said their experience was not good: "${message}". Reply with empathy in ONE short sentence (under 20 words, plain English), then ask them to describe what went wrong, right here in chat. Reply with only the message text.`,
-    close_good: `You are a WhatsApp assistant for "${businessName}".\nBusiness info:${buildBusinessFaq(client)}${historyBlock}The customer just described what they liked: "${message}". Write ONE short, warm thank-you (under 20 words, plain English) that references something specific they mentioned. Do NOT include any link or ask for a review yourself — that will be added separately. Reply with only the message text.`,
-    close_bad: `You are a WhatsApp assistant for "${businessName}".\nBusiness info:${buildBusinessFaq(client)}${historyBlock}The customer just described a problem: "${message}". Write ONE short, empathetic acknowledgment (under 20 words, plain English) referencing what they said, and reassure them the team will look into it. No links, no discounts. Reply with only the message text.`,
-    ask_improve_followup: `You are a WhatsApp assistant for "${businessName}".${itemLine}\nBusiness info:${buildBusinessFaq(client)}${historyBlock}A customer's experience was just okay/neutral: "${message}". Reply in ONE short sentence (under 20 words, plain English) acknowledging that, then ask what we could do to make it better. Reply with only the message text.`,
-    close_neutral: `You are a WhatsApp assistant for "${businessName}".\nBusiness info:${buildBusinessFaq(client)}${historyBlock}The customer just shared what could be improved: "${message}". Write ONE short, appreciative acknowledgment (under 20 words, plain English) referencing what they said, no links, no discounts. Reply with only the message text.`,
-  };
-
-  const prompt = stagePrompts[stage];
-  if (!prompt) return null;
-
-  try {
-    const reply = await callGroq([{ role: "user", content: prompt }], client);
-    recordUse(client);
-    return reply;
-  } catch (err) {
-    logger.error(`Groq reply generation failed (stage=${stage}):`, err.message);
-    return null;
-  }
-}
-
 async function extractFreeTextFeedback(message, sentiment, history, client) {
   const categories = sentiment === "happy"
     ? ["Staff/Service", "Food/Product", "Ambience/Location", "Everything"]
@@ -315,4 +285,4 @@ async function understandOffMenuInput(message, stage, sentiment, history, client
   }
 }
 
-module.exports = { analyzeSentiment, craftReply, extractFreeTextFeedback, generateDraft, generateClosing, understandOffMenuInput };
+module.exports = { analyzeSentiment, extractFreeTextFeedback, generateDraft, generateClosing, understandOffMenuInput };

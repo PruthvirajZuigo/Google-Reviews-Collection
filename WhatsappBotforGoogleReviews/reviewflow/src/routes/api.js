@@ -379,10 +379,12 @@ router.post("/admin/users", requireAuth, requireAdmin, async (req, res, next) =>
   try {
     const { username, password, role, name, clientId } = req.body;
     if (!username) return res.status(400).json({ error: "username required" });
-    if (role === "client" && !clientId) return res.status(400).json({ error: "clientId required for client accounts" });
+    // A missing role defaults to a client account, so it still needs a clientId.
+    const effectiveRole = role || "client";
+    if (effectiveRole === "client" && !clientId) return res.status(400).json({ error: "clientId required for client accounts" });
     const existing = await User.findOne({ username }).lean();
     if (existing) return res.status(409).json({ error: "Username already exists" });
-    const user = new User({ username, role: role || "client", name: name || "", clientId: role === "client" ? clientId : null });
+    const user = new User({ username, role: effectiveRole, name: name || "", clientId: effectiveRole === "client" ? clientId : null });
     user.setPassword(password || username);
     await user.save();
     res.status(201).json({ _id: user._id, username: user.username, role: user.role, name: user.name, clientId: user.clientId, active: user.active });

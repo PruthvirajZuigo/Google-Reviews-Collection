@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const twilioService = require("../services/twilio");
-const { analyzeSentiment, craftReply, extractFreeTextFeedback, generateDraft, generateClosing, understandOffMenuInput } = require("../services/huggingface");
+const { analyzeSentiment, extractFreeTextFeedback, generateDraft, generateClosing, understandOffMenuInput } = require("../services/huggingface");
 const storage = require("../services/storage");
 const logger = require("../services/logger");
 const templates = require("../utils/hinglishTemplates");
@@ -167,7 +167,7 @@ async function handleMessage(from, body, messageSid, options = {}) {
     if (!escalationLabel) {
       replyText = await tryAiUnderstand(body, convo.state, convo.sentiment, history, templates.escalationOptions(), activeClient);
     } else {
-      await setState(key, { state: STATES.AWAITING_DRAFT_CHOICE, escalation: escalationLabel, clientId, lastMessageSid: messageSid });
+      await setState(key, { state: STATES.AWAITING_DRAFT_CHOICE, clientId, lastMessageSid: messageSid });
       await storage.appendRecord({ clientId, phone: key, customerName: convo.customerName, sentiment: convo.sentiment, state: STATES.AWAITING_DRAFT_CHOICE, feedbackText: escalationLabel, triggerSource: "webhook", ...recordTag });
       if (escalationLabel === "Contact me" && !options.isTest && activeClient.profile.managerWhatsapp) {
         await twilioService.sendWhatsApp(activeClient.profile.managerWhatsapp, `⚠️ Customer requested follow-up from ${from}: "${convo.choice}"\nAction: Contact customer`);

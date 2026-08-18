@@ -40,16 +40,6 @@ function requireAdmin(req, res, next) {
 }
 
 /**
- * Returns the clientId this request may access.
- * - client-scoped users: ALWAYS their own clientId (they cannot see others).
- * - admins: the requested clientId, or null for "all clients".
- */
-function scopeClientId(req) {
-  if (req.user && req.user.role === "client") return req.user.clientId || null;
-  return req.query.clientId || req.body?.clientId || null;
-}
-
-/**
  * Middleware: computes req.scopedClientId after requireAuth.
  * Client users are locked to their own client; admins may pass ?clientId
  * (null = all clients). Client users without a client binding get 403.
@@ -65,4 +55,4 @@ function resolveScope(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, requireAdmin, scopeClientId, resolveScope, extractToken };
+module.exports = { requireAuth, requireAdmin, resolveScope, extractToken };

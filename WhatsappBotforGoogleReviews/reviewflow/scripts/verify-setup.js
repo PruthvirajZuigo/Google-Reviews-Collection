@@ -20,17 +20,20 @@ const nodeModulesPath = path.join(__dirname, "..", "node_modules");
 if (fs.existsSync(nodeModulesPath)) ok("node_modules present (npm install was run)");
 else fail("node_modules missing — run `npm install`");
 
-// 3. Required env vars
-const required = ["PORT", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WHATSAPP_FROM", "DASHBOARD_PASSWORD"];
+// 3. Required env vars (demo mode degrades gracefully via mocks/fallbacks)
+const required = ["MONGO_URI", "AUTH_SECRET", "ADMIN_USERNAME", "ADMIN_PASSWORD", "PORT", "TWILIO_WHATSAPP_FROM"];
 required.forEach((key) => {
-  if (process.env[key] && !process.env[key].includes("xxx")) ok(`${key} is set`);
-  else warn(`${key} is missing or still a placeholder — demo mode will use mocks instead`);
+  if (process.env[key] && !process.env[key].includes("xxx") && !process.env[key].includes("change-me")) {
+    ok(`${key} is set`);
+  } else {
+    warn(`${key} is missing or still a placeholder — demo mode will use defaults/mocks`);
+  }
 });
 
-if (process.env.HUGGINGFACE_API_KEY && !process.env.HUGGINGFACE_API_KEY.includes("xxx")) {
-  ok("HUGGINGFACE_API_KEY is set");
+if (process.env.GROQ_API_KEY && !process.env.GROQ_API_KEY.includes("xxx")) {
+  ok("GROQ_API_KEY is set");
 } else {
-  warn("HUGGINGFACE_API_KEY missing — sentiment analysis will use the keyword fallback only");
+  warn("GROQ_API_KEY missing — AI features fall back to the local keyword rules (sentiment, drafts, explanations)");
 }
 
 // 4. Twilio connectivity (only if creds look real)
@@ -49,31 +52,35 @@ async function checkTwilio() {
   }
 }
 
-// 5. Hugging Face connectivity (only if key looks real)
-async function checkHuggingFace() {
-  if (!process.env.HUGGINGFACE_API_KEY || process.env.HUGGINGFACE_API_KEY.includes("xxx")) {
-    warn("Skipping Hugging Face connectivity check (no real key set)");
+// 5. Groq connectivity (only if key looks real)
+async function checkGroq() {
+  if (!process.env.GROQ_API_KEY || process.env.GROQ_API_KEY.includes("xxx")) {
+    warn("Skipping Groq connectivity check (no real API key set)");
     return;
   }
   try {
     const axios = require("axios");
     await axios.post(
-      `https://api-inference.huggingface.co/models/${process.env.HF_SENTIMENT_MODEL || "cardiffnlp/twitter-roberta-base-sentiment-latest"}`,
-      { inputs: "test" },
-      { headers: { Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}` }, timeout: 10000 }
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        model: process.env.GROQ_MODEL || "groq/compound-mini",
+        messages: [{ role: "user", content: "ping" }],
+        max_tokens: 1,
+      },
+      { headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}` }, timeout: 10000 }
     );
-    ok("Hugging Face API key is valid");
+    ok("Groq API key is valid");
   } catch (err) {
-    fail(`Hugging Face connectivity failed: ${err.message}`);
+    fail(`Groq connectivity failed: ${err.message}`);
   }
 }
 
 (async () => {
   await checkTwilio();
-  await checkHuggingFace();
+  await checkGroq();
   console.log("\n=== Done ===");
   if (hasErrors) {
-    console.log("Some checks failed — see ❌ above. The app will still run in mock mode for anything unconfigured.\n");
+    console.log("Some checks failed — see ❌ above. The app will still run in demo mode for anything unconfigured.\n");
     process.exit(1);
   } else {
     console.log("All good — run `npm start`.\n");

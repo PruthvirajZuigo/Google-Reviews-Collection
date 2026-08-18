@@ -7,7 +7,6 @@ const conversationSchema = new mongoose.Schema({
   customerName: { type: String, default: "Customer" },
   sentiment: { type: String },
   choice: { type: String },
-  escalation: { type: String },
   draft: { type: String },
   originalFeedback: { type: String },
   lastMessageSid: { type: String },
