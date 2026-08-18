@@ -18,11 +18,7 @@
     "express": "4.19.2",
     "express-rate-limit": "7.4.0",
     "helmet": "7.1.0",
-    "mongoose": "^9.8.1",
-    "multer": "^2.2.0",
-    "node-cron": "^4.6.0",
     "sentiment": "^5.0.2",
-    "twilio": "5.3.4",
-    "xlsx": "^0.18.5"
+    "twilio": "5.3.4"
   }
 }

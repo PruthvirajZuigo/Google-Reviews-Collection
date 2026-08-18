@@ -8,10 +8,27 @@ const cache = new Map();
 const localAnalyzer = new Sentiment();
 
 /**
+ * How much AI this client gets, from Admin → Compliance → AI mode:
+ *  - "full":            sentiment + replies + drafts all use AI
+ *  - "rules+sentiment": AI only classifies sentiment; replies/drafts use local rules
+ *  - "rules-only":      everything local — no AI calls at all
+ */
+function clientAiLevel(client) {
+  return client?.compliance?.aiMode || "full";
+}
+
+/** Admin → Features → Business FAQ: when off, the AI is not fed business facts. */
+function businessFaqEnabled(client) {
+  return client?.features?.businessFaq !== false;
+}
+
+/**
  * Build the business-info block for an AI prompt from a client's config.
  * Falls back to the legacy env-based FAQ for pre-multi-tenant calls.
+ * Empty when the Business FAQ feature is disabled for the client.
  */
 function buildBusinessFaq(client) {
+  if (!businessFaqEnabled(client)) return "";
   const profile = client?.profile || {};
   const hours = profile.businessHours || process.env.DEMO_BUSINESS_HOURS || "";
   const offer = profile.offer || process.env.DEMO_BUSINESS_OFFER || "";
@@ -24,12 +41,18 @@ function buildBusinessFaq(client) {
   return parts.join("\n");
 }
 
-async function callGroq(messages) {
+async function callGroq(messages, client) {
+  // Per-client LLM settings (Admin → AI / LLM) drive the model + parameters.
+  const model = client?.llm?.model || process.env.GROQ_MODEL || "groq/compound-mini";
+  const temperature = client?.llm?.temperature ?? 0.7;
+  const maxTokens = client?.llm?.maxTokens ?? 300;
   const { data } = await axios.post(
     "https://api.groq.com/openai/v1/chat/completions",
     {
-      model: "llama-3.3-70b-versatile",
+      model,
       messages: Array.isArray(messages) ? messages : [{ role: "user", content: messages }],
+      temperature,
+      max_tokens: maxTokens,
     },
     { headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}` }, timeout: 10000 }
   );
@@ -60,7 +83,7 @@ async function analyzeSentiment(message, history, client) {
   const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.result;
 
-  if (!process.env.GROQ_API_KEY || !canUseAI(client)) return localSentimentFallback(message);
+  if (!process.env.GROQ_API_KEY || !canUseAI(client) || clientAiLevel(client) === "rules-only") return localSentimentFallback(message);
 
   try {
     const past = history ? buildHistoryText(history) : "";
@@ -74,7 +97,7 @@ async function analyzeSentiment(message, history, client) {
         role: "user",
         content: `A customer replied to "how was your experience?" with: "${message}".${contextBlock}\nClassify the overall sentiment. Reply with only the word.`
       }
-    ]);
+    ], client);
     recordUse(client);
     const lower = text.toLowerCase();
     const sentiment = lower.includes("happy") ? SENTIMENTS.HAPPY : lower.includes("sad") ? SENTIMENTS.SAD : SENTIMENTS.NEUTRAL;
@@ -89,7 +112,7 @@ async function analyzeSentiment(message, history, client) {
 
 async function craftReply(message, stage, context = {}) {
   const { businessName = "our business", item, history, client } = context;
-  if (!process.env.GROQ_API_KEY || !canUseAI(client)) return null;
+  if (!process.env.GROQ_API_KEY || !canUseAI(client) || clientAiLevel(client) !== "full") return null;
 
   const itemLine = item ? ` They came in for: ${item}.` : "";
   const past = history ? buildHistoryText(history) : "";
@@ -108,7 +131,7 @@ async function craftReply(message, stage, context = {}) {
   if (!prompt) return null;
 
   try {
-    const reply = await callGroq([{ role: "user", content: prompt }]);
+    const reply = await callGroq([{ role: "user", content: prompt }], client);
     recordUse(client);
     return reply;
   } catch (err) {
@@ -122,7 +145,7 @@ async function extractFreeTextFeedback(message, sentiment, history, client) {
     ? ["Staff/Service", "Food/Product", "Ambience/Location", "Everything"]
     : ["Staff behavior", "Food/Product quality", "Waiting time", "Something else"];
 
-  if (process.env.GROQ_API_KEY && canUseAI(client)) {
+  if (process.env.GROQ_API_KEY && canUseAI(client) && clientAiLevel(client) === "full") {
     try {
       const past = history ? buildHistoryText(history) : "";
       const contextBlock = past ? `\nContext: customer said "${message}". Prior chat:\n${past}\n` : "";
@@ -135,7 +158,7 @@ async function extractFreeTextFeedback(message, sentiment, history, client) {
           role: "user",
           content: `Customer feedback: "${message}".${contextBlock}\nWhich category fits? Reply with only the category name.`
         }
-      ]);
+      ], client);
       recordUse(client);
       const match = categories.find((c) => text.toLowerCase().includes(c.toLowerCase()));
       if (match) return match;
@@ -159,7 +182,7 @@ async function extractFreeTextFeedback(message, sentiment, history, client) {
 }
 
 async function generateDraft(feedback, sentiment, isDetailed, client) {
-  if (process.env.GROQ_API_KEY && canUseAI(client)) {
+  if (process.env.GROQ_API_KEY && canUseAI(client) && clientAiLevel(client) === "full") {
     try {
       const detailInstruction = isDetailed
         ? "Write a detailed 3-4 sentence Google review in first person. Be specific and elaborate using the customer's own words. Do not add anything they didn't mention. Reply with only the review text."
@@ -173,7 +196,7 @@ async function generateDraft(feedback, sentiment, isDetailed, client) {
           role: "user",
           content: `A customer said: "${feedback}". Their overall tone is ${sentiment}.`
         }
-      ]);
+      ], client);
       recordUse(client);
       return text;
     } catch (err) {
@@ -243,7 +266,7 @@ function localDraft(feedback, sentiment, isDetailed, client) {
 }
 
 async function generateClosing(message, sentiment, conversationState, history, client) {
-  if (!process.env.GROQ_API_KEY || !canUseAI(client)) return null;
+  if (!process.env.GROQ_API_KEY || !canUseAI(client) || clientAiLevel(client) !== "full") return null;
 
   const past = history ? buildHistoryText(history) : "";
   const historyBlock = past ? `\nConversation history:\n${past}\n` : "";
@@ -257,7 +280,7 @@ async function generateClosing(message, sentiment, conversationState, history, c
         role: "user",
         content: `The customer's last message was: "${message}". Their overall sentiment was ${sentiment}. Current state: ${conversationState}.${historyBlock}Generate a natural closing line.`
       }
-    ]);
+    ], client);
     recordUse(client);
     return text;
   } catch (err) {
@@ -266,7 +289,7 @@ async function generateClosing(message, sentiment, conversationState, history, c
 }
 
 async function understandOffMenuInput(message, stage, sentiment, history, client) {
-  if (!process.env.GROQ_API_KEY || !canUseAI(client)) return null;
+  if (!process.env.GROQ_API_KEY || !canUseAI(client) || clientAiLevel(client) !== "full") return null;
   const past = history ? buildHistoryText(history) : "";
   const historyBlock = past ? `\nConversation history:\n${past}\n` : "";
   const isCompleted = stage === "COMPLETED";
@@ -283,7 +306,7 @@ async function understandOffMenuInput(message, stage, sentiment, history, client
         role: "user",
         content: `Current stage: ${stage}. Customer's overall sentiment: ${sentiment}. Their message: "${message}".${historyBlock}`
       }
-    ]);
+    ], client);
     recordUse(client);
     if (text === "UNRECOGNIZED") return null;
     return text;

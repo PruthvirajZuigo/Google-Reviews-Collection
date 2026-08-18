@@ -10,7 +10,7 @@ const logger = require("./src/services/logger");
 const storage = require("./src/services/storage");
 const scheduler = require("./src/services/scheduler");
 const { MOCK_RECORDS } = require("./src/utils/mockData");
-const rateLimiter = require("./src/middleware/rateLimiter");
+const { apiLimiter, loginLimiter } = require("./src/middleware/rateLimiter");
 const { sanitizeBodyStrings } = require("./src/middleware/validator");
 const errorHandler = require("./src/middleware/errorHandler");
 const connectDB = require("./src/config/database");
@@ -40,7 +40,10 @@ app.use(
 app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // Twilio posts form-encoded
-app.use(rateLimiter);
+// Rate limits apply to the API only (not static assets, not the Twilio webhook).
+// Login gets a tight budget; the rest of the API a generous one.
+app.use("/api/login", loginLimiter);
+app.use("/api", apiLimiter);
 app.use(sanitizeBodyStrings);
 
 // Dev: never cache HTML/CSS/JS so a stale browser copy can't run old code

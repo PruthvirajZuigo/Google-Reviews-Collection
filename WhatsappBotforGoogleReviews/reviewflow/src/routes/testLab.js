@@ -6,6 +6,28 @@ const twilioService = require("../services/twilio");
 const Conversation = require("../models/Conversation");
 const TestMessage = require("../models/TestMessage");
 const { requireFields } = require("../middleware/validator");
+const clientConfig = require("../services/clientConfig");
+
+/**
+ * Test Lab is a per-client feature: client-role accounts can only use it when
+ * their Admin → Features → Test Lab flag is on. Admins always pass (they own
+ * every business, so they're never blocked from the simulator).
+ */
+async function requireTestLabFeature(req, res, next) {
+  try {
+    if (req.user && req.user.role === "client") {
+      const client = await clientConfig.getClientById(req.user.clientId);
+      const allowed = !!(client && client.features && client.features.testLab === true);
+      if (!allowed) {
+        return res.status(403).json({ error: "Test Lab is disabled for your client." });
+      }
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+router.use(requireTestLabFeature);
 
 const SCENARIOS = {
   happy_review: {

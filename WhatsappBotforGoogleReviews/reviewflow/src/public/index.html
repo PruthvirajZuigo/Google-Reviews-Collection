@@ -26,14 +26,14 @@
 
     <main id="dashboardMain">
       <nav class="tabs" id="mainTabs">
-        <button type="button" class="tab-btn active" data-tab="overview">Overview</button>
+        <button type="button" class="tab-btn active" data-tab="overview" id="tabBtnOverview">Overview</button>
         <button type="button" class="tab-btn" data-tab="customers">Customers</button>
         <button type="button" class="tab-btn" data-tab="send">Send</button>
         <button type="button" class="tab-btn" data-tab="testlab" id="tabBtnTestLab">Test Lab</button>
       </nav>
 
       <section class="tab-panel" data-panel="overview">
-        <section class="stat-row">
+        <section class="stat-row" id="panelStats">
           <div class="stat-card">
             <div class="stat-num" id="statTotal">0</div>
             <div class="stat-label">Total messages</div>
@@ -52,12 +52,12 @@
           </div>
         </section>
 
-        <section class="panel">
+        <section class="panel" id="panelChart">
           <h2>Sentiment split</h2>
           <canvas id="sentimentChart" height="120"></canvas>
         </section>
 
-        <section class="panel">
+        <section class="panel" id="panelRecent">
           <h2>Recent conversations</h2>
           <div class="table-wrap">
           <table id="recentTable">
@@ -88,6 +88,7 @@
                 <input id="crudName" placeholder="Name" />
                 <input id="crudPhone" placeholder="Phone (e.g. 7499817978)" />
                 <input id="crudVisitDate" type="date" />
+                <label style="display:flex;align-items:center;gap:4px;font-size:.75rem"><input id="crudOptIn" type="checkbox" checked /> Opted-in</label>
                 <button id="crudAddBtn" class="btn btn-primary">Add Customer</button>
               </div>
             </div>
@@ -96,7 +97,7 @@
               <div class="table-wrap">
                 <table id="customerTable">
                   <thead>
-                    <tr><th>Name</th><th>Phone</th><th>Visit Date</th><th>Messaged?</th><th>Reviewed?</th><th>Actions</th></tr>
+                    <tr><th>Name</th><th>Phone</th><th>Visit Date</th><th>Messaged?</th><th>Reviewed?</th><th>Review</th><th>Actions</th></tr>
                   </thead>
                   <tbody></tbody>
                 </table>
@@ -111,6 +112,7 @@
                   <input id="editName" placeholder="Name" />
                   <input id="editVisitDate" type="date" />
                   <label><input id="editReviewed" type="checkbox" /> Reviewed</label>
+                  <label><input id="editOptIn" type="checkbox" /> Opted-in</label>
                   <button id="editSaveBtn" class="btn btn-primary">Save</button>
                   <button id="editCancelBtn" class="btn btn-secondary">Cancel</button>
                 </div>
@@ -121,7 +123,7 @@
       </section>
 
       <section class="tab-panel hidden" data-panel="send">
-        <section class="panel">
+        <section class="panel" id="panelManual">
           <h2>Send Now</h2>
           <p class="desc">Send a welcome message to one customer immediately.</p>
           <div class="trigger-row">
@@ -132,7 +134,7 @@
           </div>
         </section>
 
-        <section class="panel">
+        <section class="panel" id="panelBatch">
           <h2>Batch Send</h2>
           <p class="desc">Contacts every pending customer in the database who hasn't been messaged yet and sends them a welcome.</p>
           <div class="trigger-row">
@@ -142,7 +144,7 @@
           <div id="batchPreview" class="result-box hidden"></div>
         </section>
 
-        <section class="panel">
+        <section class="panel" id="panelExcel">
           <h2>Excel Import</h2>
           <p class="desc">Bulk-import customers and message them. Columns: Name, Phone, VisitDate, Notes, ReviewProvided</p>
           <div class="trigger-row">
@@ -186,7 +188,7 @@
       </section>
     </main>
 
-    <script src="/auth.js?v=4"></script>
-    <script src="/dashboard.js?v=4"></script>
+    <script src="/auth.js?v=7"></script>
+    <script src="/dashboard.js?v=7"></script>
   </body>
 </html>

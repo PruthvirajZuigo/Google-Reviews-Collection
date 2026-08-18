@@ -7,6 +7,7 @@ const customerSchema = new mongoose.Schema({
   visitDate: { type: Date, default: Date.now },
   reviewProvided: { type: Boolean, default: false },
   reviewLinkSentAt: { type: Date },
+  reviewText: { type: String },
   additionalNotes: { type: String, default: "" },
   firstContactedAt: { type: Date },
   optedIn: { type: Boolean, default: false },

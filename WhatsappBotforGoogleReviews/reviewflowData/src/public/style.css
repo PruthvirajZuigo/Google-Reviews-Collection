@@ -1,0 +1,33 @@
+:root {
+  --green: #25D366; --ink: #202124; --ink-soft: #5f6368;
+  --paper: #f5f2ea; --card: #fff; --line: #E3E5E8; --red: #EA4335; --yellow: #FBBC05;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: 'Segoe UI', Roboto, sans-serif; background: var(--paper); color: var(--ink); }
+.hidden { display: none; }
+
+.topbar { background: var(--ink); color: white; padding: 14px 24px; display: flex; align-items: center; gap: 16px; }
+.brand { font-weight: 700; font-size: 1.05rem; }
+.badge { background: var(--yellow); color: #3a2f00; font-size: 0.65rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
+#authBox { margin-left: auto; display: flex; gap: 8px; }
+#authBox input { padding: 7px 10px; border-radius: 8px; border: 1px solid #444; }
+#authBox button { background: var(--green); border: none; padding: 7px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+
+main { max-width: 900px; margin: 0 auto; padding: 24px 16px 60px; }
+
+.stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+.stat-card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; text-align: center; }
+.stat-num { font-size: 1.6rem; font-weight: 700; }
+.stat-label { font-size: 0.75rem; color: var(--ink-soft); }
+
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 20px; }
+.panel h2 { font-size: 1rem; margin: 0 0 14px; }
+
+.trigger-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.trigger-row input { flex: 1; min-width: 160px; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); }
+.trigger-row button { background: var(--green); color: #06251c; border: none; padding: 9px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; }
+#triggerResult { margin-top: 10px; font-size: 0.85rem; color: var(--ink-soft); }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+th { color: var(--ink-soft); font-size: 0.72rem; text-transform: uppercase; }

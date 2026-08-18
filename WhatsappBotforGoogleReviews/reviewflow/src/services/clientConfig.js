@@ -35,6 +35,14 @@ async function ensureSeed() {
   }
 
   const adminUser = await User.findOne({ role: "admin" }).lean();
+
+  // Legacy default client: consent gating only becomes active once the admin
+  // explicitly turns it on. Docs that never had the field (pre-wiring) should
+  // keep batch sending so the existing demo flow works out of the box.
+  await Client.updateOne(
+    { clientId: DEFAULT_CLIENT_ID, "compliance.requireOptIn": { $exists: false } },
+    { $set: { "compliance.requireOptIn": false } }
+  );
   if (!adminUser) {
     const admin = new User({
       username: process.env.ADMIN_USERNAME || "admin",
@@ -182,55 +190,6 @@ async function deleteClient(clientId) {
   return true;
 }
 
-/**
- * YAML template loader — a new client can be created by uploading a template.
- * See src/config/client-template.yaml. Unknown keys are ignored; missing keys
- * fall back to defaults.
- */
-async function createClientFromYaml(yamlText) {
-  const YAML = require("yaml");
-  const data = YAML.parse(yamlText);
-  if (!data || !data.name) throw new Error("Template must contain a 'name'");
-  const pick = (obj, key) => (obj && obj[key] !== undefined ? obj[key] : undefined);
-  return createClient({
-    clientId: pick(data, "clientId"),
-    name: data.name,
-    profile: {
-      googleReviewUrl: pick(data.profile, "googleReviewUrl"),
-      feedbackFormUrl: pick(data.profile, "feedbackFormUrl"),
-      managerWhatsapp: pick(data.profile, "managerWhatsapp"),
-      businessHours: pick(data.profile, "businessHours"),
-      offer: pick(data.profile, "offer"),
-    },
-    scheduler: {
-      batchTime: pick(data.scheduler, "batchTime"),
-      confirmDelayMinutes: pick(data.scheduler, "confirmDelayMinutes"),
-      protectionDays: pick(data.scheduler, "protectionDays"),
-    },
-    features: {
-      testLab: pick(data.features, "testLab"),
-      dashboard: pick(data.features, "dashboard"),
-      excelUpload: pick(data.features, "excelUpload"),
-      manualTrigger: pick(data.features, "manualTrigger"),
-      recordsHistory: pick(data.features, "recordsHistory"),
-      businessFaq: pick(data.features, "businessFaq"),
-    },
-    llm: {
-      provider: pick(data.llm, "provider"),
-      model: pick(data.llm, "model"),
-      temperature: pick(data.llm, "temperature"),
-      maxTokens: pick(data.llm, "maxTokens"),
-      dailyBudgetCalls: pick(data.llm, "dailyBudgetCalls"),
-    },
-    compliance: {
-      requireOptIn: pick(data.compliance, "requireOptIn"),
-      handleStop: pick(data.compliance, "handleStop"),
-      aiMode: pick(data.compliance, "aiMode"),
-      throttlePerHour: pick(data.compliance, "throttlePerHour"),
-    },
-  });
-}
-
 module.exports = {
   DEFAULT_CLIENT_ID,
   ensureSeed,
@@ -241,6 +200,5 @@ module.exports = {
   createClient,
   updateClient,
   deleteClient,
-  createClientFromYaml,
   normalizeClient,
 };

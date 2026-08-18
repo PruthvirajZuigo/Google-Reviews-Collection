@@ -48,22 +48,22 @@ async function handleMessage(from, body, messageSid, options = {}) {
   // Flag test-generated records so dashboard/aggregations can exclude them.
   const recordTag = options.isTest ? { test: true } : {};
 
-  // Resolve the owning client from the sender's phone (or an explicit clientId
-  // when supplied, e.g. from the simulator/admin). Everything downstream reads
-  // business values from this client's config — no hardcoded business data.
-  const activeClient = await resolveClient({
-    clientId: options.clientId,
-    phone: options.isTest ? from : String(from).replace(/^whatsapp:/, ""),
-  });
-  const clientId = activeClient?.clientId || DEFAULT_CLIENT_ID;
-
-  const lastSeen = (await getState(key))?.lastMessageSid;
+  // Read the conversation state first: the client that seeded the message wins
+  // ownership (e.g. manual trigger / batch), so replies resolve back to them.
+  let convo = await getState(key) || { state: STATES.INIT, customerName: "Customer" };
+  const lastSeen = convo?.lastMessageSid;
   if (messageSid && messageSid === lastSeen) {
     logger.info(`Duplicate webhook delivery ignored: ${messageSid}`);
     return null;
   }
 
-  let convo = await getState(key) || { state: STATES.INIT, customerName: "Customer" };
+  // Resolve the owning client from an explicit clientId, else the seeded
+  // conversation's client, else the sender's Customer record, else the default.
+  const activeClient = await resolveClient({
+    clientId: options.clientId || (convo && convo.clientId),
+    phone: options.isTest ? from : String(from).replace(/^whatsapp:/, ""),
+  });
+  const clientId = activeClient?.clientId || DEFAULT_CLIENT_ID;
   const history = await storage.getRecentHistory(key, 4, clientId);
   let replyText;
   // Set when this reply should be sent as an interactive list instead of plain text.
@@ -126,7 +126,7 @@ async function handleMessage(from, body, messageSid, options = {}) {
       interactive = { bodyText: optionText, contentSid: CONTENT_TEMPLATES.reviewOptions };
     }
 
-      await setState(key, { state: nextState, sentiment, clientId, lastMessageSid: messageSid });
+      await setState(key, { state: nextState, sentiment, clientId, lastMessageSid: messageSid, originalFeedback: body });
       replyText = reengagement + optionText;
       // Returning customers get one combined plain-text message (prefix + menu);
       // a list-picker can only carry the menu body, so keep it plain here.
@@ -168,6 +168,7 @@ async function handleMessage(from, body, messageSid, options = {}) {
       replyText = await tryAiUnderstand(body, convo.state, convo.sentiment, history, templates.escalationOptions(), activeClient);
     } else {
       await setState(key, { state: STATES.AWAITING_DRAFT_CHOICE, escalation: escalationLabel, clientId, lastMessageSid: messageSid });
+      await storage.appendRecord({ clientId, phone: key, customerName: convo.customerName, sentiment: convo.sentiment, state: STATES.AWAITING_DRAFT_CHOICE, feedbackText: escalationLabel, triggerSource: "webhook", ...recordTag });
       if (escalationLabel === "Contact me" && !options.isTest && activeClient.profile.managerWhatsapp) {
         await twilioService.sendWhatsApp(activeClient.profile.managerWhatsapp, `⚠️ Customer requested follow-up from ${from}: "${convo.choice}"\nAction: Contact customer`);
       }
@@ -185,17 +186,19 @@ async function handleMessage(from, body, messageSid, options = {}) {
       else replyText = await tryAiUnderstand(body, convo.state, convo.sentiment, history, templates.draftOption(), activeClient);
     }
     if (draftChoice) {
-      await setState(key, { state: STATES.AWAITING_REVIEW_CONFIRM, clientId, lastMessageSid: messageSid });
-      await storage.appendRecord({ clientId, phone: key, customerName: convo.customerName, sentiment: convo.sentiment, state: STATES.AWAITING_REVIEW_CONFIRM, feedbackText: convo.choice || body, triggerSource: "webhook", ...recordTag });
       if (draftChoice === "Yes") {
-        const draft = await generateDraft(convo.choice || body, convo.sentiment || "happy", false, activeClient);
+        const draft = await generateDraft(convo.originalFeedback || convo.choice || body, convo.sentiment || "happy", false, activeClient);
+        await setState(key, { state: STATES.AWAITING_REVIEW_CONFIRM, draft, clientId, lastMessageSid: messageSid });
+        await storage.appendRecord({ clientId, phone: key, customerName: convo.customerName, sentiment: convo.sentiment, state: STATES.AWAITING_REVIEW_CONFIRM, feedbackText: convo.choice || body, reviewText: draft, triggerSource: "webhook", ...recordTag });
         replyText = `*Here's a draft you can copy:*\n\n${draft}\n\n_Tap and hold to copy, then paste it here:_\n${activeClient.profile.googleReviewUrl}`;
       } else {
+        await setState(key, { state: STATES.AWAITING_REVIEW_CONFIRM, clientId, lastMessageSid: messageSid });
+        await storage.appendRecord({ clientId, phone: key, customerName: convo.customerName, sentiment: convo.sentiment, state: STATES.AWAITING_REVIEW_CONFIRM, feedbackText: convo.choice || body, triggerSource: "webhook", ...recordTag });
         replyText = `No problem! Here's the link to leave a review:\n\n${activeClient.profile.googleReviewUrl}`;
       }
       if (!options.isTest) {
         await storage.markReviewLinkSent(from, clientId);
-        scheduleReviewNudge(key);
+        scheduleReviewNudge(key, (activeClient.scheduler.confirmDelayMinutes ?? 30) * 60 * 1000);
       }
     }
   } else if (convo.state === STATES.AWAITING_REVIEW_CONFIRM) {
@@ -205,22 +208,23 @@ async function handleMessage(from, body, messageSid, options = {}) {
     const no = choice === 2 || (/\b(no|not\s*yet|nope|nah|later|abhi\s*nahi|nahi)\b/i.test(lower) && !/\b(yes|posted|done|haan|ha)\b/i.test(lower));
     if (yes) {
       await setState(key, { state: STATES.COMPLETED, reviewConfirm: true, clientId, lastMessageSid: messageSid });
-      await storage.appendRecord({ clientId, phone: key, customerName: convo.customerName, sentiment: convo.sentiment, state: STATES.COMPLETED, feedbackText: convo.choice || body, reviewConfirm: true, triggerSource: "webhook", ...recordTag });
+      await storage.appendRecord({ clientId, phone: key, customerName: convo.customerName, sentiment: convo.sentiment, state: STATES.COMPLETED, feedbackText: convo.choice || body, reviewText: convo.draft, reviewConfirm: true, triggerSource: "webhook", ...recordTag });
       if (!options.isTest) {
         await storage.markReviewProvided(from, clientId);
+        if (convo.draft) await storage.setCustomerReviewText(from, clientId, convo.draft);
         clearReviewNudge(key);
       }
       replyText = templates.reviewConfirmThanks();
     } else if (no) {
       await setState(key, { state: STATES.COMPLETED, reviewConfirm: false, clientId, lastMessageSid: messageSid });
-      await storage.appendRecord({ clientId, phone: key, customerName: convo.customerName, sentiment: convo.sentiment, state: STATES.COMPLETED, feedbackText: convo.choice || body, reviewConfirm: false, triggerSource: "webhook", ...recordTag });
+      await storage.appendRecord({ clientId, phone: key, customerName: convo.customerName, sentiment: convo.sentiment, state: STATES.COMPLETED, feedbackText: convo.choice || body, reviewText: convo.draft, reviewConfirm: false, triggerSource: "webhook", ...recordTag });
       replyText = templates.reviewConfirmNotYet(activeClient.profile.googleReviewUrl);
     } else {
       replyText = templates.reviewConfirmPrompt();
     }
   } else if (convo.state === STATES.COMPLETED) {
     if (templates.isDraftRewriteRequest(body) && convo.choice) {
-      const draft = await generateDraft(convo.choice, convo.sentiment || "happy", true, activeClient);
+      const draft = await generateDraft(convo.originalFeedback || convo.choice, convo.sentiment || "happy", true, activeClient);
       replyText = `Sure! Here's a more detailed version:\n\n${draft}\n\n${activeClient.profile.googleReviewUrl}`;
     } else if (templates.isDraftRewriteRequest(body)) {
       replyText = `Sorry, I don't have your previous feedback to expand on. Could you tell me about your experience?`;
@@ -251,9 +255,10 @@ async function tryAiUnderstand(body, stage, sentiment, history, templateFallback
 // the review-link message clears the pending nudge instead of piling up timers.
 const reviewNudges = new Map();
 
-function scheduleReviewNudge(key) {
+function scheduleReviewNudge(key, delayMs) {
   clearReviewNudge(key);
-  const delayMs = Number(process.env.REVIEW_CONFIRM_DELAY_MS) || 2 * 60 * 60 * 1000;
+  // Per-client confirm delay (minutes) wins; falls back to env then 30 min.
+  const ms = Number(delayMs) || Number(process.env.REVIEW_CONFIRM_DELAY_MS) || 30 * 60 * 1000;
   const timer = setTimeout(async () => {
     reviewNudges.delete(key);
     const convo = await getState(key);

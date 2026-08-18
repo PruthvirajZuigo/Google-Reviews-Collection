@@ -105,6 +105,42 @@ function normalizeStoredPhone(phone) {
   return cleaned;
 }
 
+/**
+ * When a client actively messages a phone, that phone becomes theirs. Creates a
+ * Customer if none exists, or adopts a legacy customer (one with no clientId,
+ * created before multi-tenancy) into `clientId`. Customers that already belong
+ * to a client are left untouched — we never steal from another client.
+ */
+async function adoptCustomerByPhone(phone, { clientId, name }) {
+  try {
+    const norm = normalizeStoredPhone(phone);
+    const existing = await Customer.findOne({ $or: [{ phone }, { phone: norm }] }).lean();
+    if (!existing) {
+      const doc = await Customer.create({
+        clientId,
+        phone: norm,
+        name: name || "Customer",
+        visitDate: new Date(),
+        reviewProvided: false,
+        reviewLinkSentAt: null,
+        optedIn: true,
+      });
+      logger.info(`[CUSTOMER] Created ${norm} under client ${clientId}`);
+      return doc.toObject();
+    }
+    if (!existing.clientId) {
+      const patch = { clientId };
+      if (!existing.name && name) patch.name = name;
+      await Customer.updateOne({ _id: existing._id }, { $set: patch });
+      logger.info(`[CUSTOMER] Adopted legacy customer ${norm} under client ${clientId}`);
+    }
+    return existing;
+  } catch (err) {
+    logger.error("Failed to adopt customer:", err.message);
+    return null;
+  }
+}
+
 async function createCustomer(data) {
   try {
     const doc = await Customer.create(data);
@@ -115,12 +151,16 @@ async function createCustomer(data) {
   }
 }
 
-async function findCustomersToContact(clientId) {
+async function findCustomersToContact(clientId, opts = {}) {
   try {
     const maxAge = 90 * 24 * 60 * 60 * 1000;
-    const protectionDays = Number(process.env.REVIEW_CONFIRM_PROTECTION_DAYS) || 7;
+    // Per-client protection window (days); falls back to env then the platform default.
+    const protectionDays = opts.protectionDays ?? (Number(process.env.REVIEW_CONFIRM_PROTECTION_DAYS) || 7);
     const protectionMs = protectionDays * 24 * 60 * 60 * 1000;
-    const customers = await Customer.find(buildClientFilter(clientId, { reviewProvided: false, optedOut: { $ne: true } })).lean();
+    // Per-client consent gating: when requireOptIn is on, only contact customers
+    // who have explicitly opted in.
+    const consentFilter = opts.requireOptIn === true ? { optedIn: true } : {};
+    const customers = await Customer.find(buildClientFilter(clientId, { reviewProvided: false, optedOut: { $ne: true }, ...consentFilter })).lean();
     const pending = [];
     for (const c of customers) {
       if (c.visitDate && Date.now() - new Date(c.visitDate).getTime() > maxAge) continue;
@@ -139,6 +179,16 @@ async function findCustomersToContact(clientId) {
   } catch (err) {
     logger.error("Failed to find customers to contact:", err.message);
     return [];
+  }
+}
+
+async function countMessagesSentInHour(clientId) {
+  try {
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    return await Record.countDocuments(buildClientFilter(clientId, { createdAt: { $gte: hourAgo } }));
+  } catch (err) {
+    logger.error("Failed to count hourly messages:", err.message);
+    return 0;
   }
 }
 
@@ -171,6 +221,18 @@ async function markReviewLinkSent(phone, clientId) {
     );
   } catch (err) {
     logger.error("Failed to mark review link sent:", err.message);
+  }
+}
+
+async function setCustomerReviewText(phone, clientId, text) {
+  try {
+    const normalized = normalizeStoredPhone(phone);
+    await Customer.updateOne(
+      { $and: [{ $or: [{ phone }, { phone: normalized }] }, buildClientFilter(clientId)] },
+      { $set: { reviewText: text } }
+    );
+  } catch (err) {
+    logger.error("Failed to set customer review text:", err.message);
   }
 }
 
@@ -236,11 +298,14 @@ module.exports = {
   getRecentHistory,
   createCustomer,
   findCustomersToContact,
+  countMessagesSentInHour,
   markContacted,
   markReviewProvided,
   markReviewLinkSent,
+  setCustomerReviewText,
   deleteCustomer,
   updateCustomer,
   findCustomerByPhone,
   listCustomers,
+  adoptCustomerByPhone,
 };

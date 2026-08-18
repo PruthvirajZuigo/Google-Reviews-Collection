@@ -8,6 +8,8 @@ const conversationSchema = new mongoose.Schema({
   sentiment: { type: String },
   choice: { type: String },
   escalation: { type: String },
+  draft: { type: String },
+  originalFeedback: { type: String },
   lastMessageSid: { type: String },
   item: { type: String },
   expiresAt: { type: Date },

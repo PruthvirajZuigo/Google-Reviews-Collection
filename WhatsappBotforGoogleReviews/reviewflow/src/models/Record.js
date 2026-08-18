@@ -8,6 +8,7 @@ const recordSchema = new mongoose.Schema({
   sentiment: String,
   state: String,
   feedbackText: String,
+  reviewText: String,
   triggerSource: String,
   choice: String,
   escalation: String,

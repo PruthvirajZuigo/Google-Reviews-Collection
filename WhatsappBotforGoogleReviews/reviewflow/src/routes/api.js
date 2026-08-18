@@ -12,7 +12,6 @@ const { STATES } = require("../config/constants");
 const { resolveClient, DEFAULT_CLIENT_ID, getClientById } = require("../services/clientConfig");
 const excelService = require("../services/excelService");
 const scheduler = require("../services/scheduler");
-const fs = require("fs");
 const path = require("path");
 const User = require("../models/User");
 const auth = require("../services/auth");
@@ -40,7 +39,7 @@ router.get("/me", requireAuth, async (req, res) => {
   const client = req.user.clientId ? await getClientById(req.user.clientId) : null;
   res.json({
     user: { _id: req.user._id, username: req.user.username, role: req.user.role, name: req.user.name, clientId: req.user.clientId || null },
-    client: client ? { clientId: client.clientId, name: client.name } : null,
+    client: client ? { clientId: client.clientId, name: client.name, features: client.features } : null,
   });
 });
 
@@ -65,12 +64,47 @@ async function runConcurrent(items, concurrency, fn) {
   return results;
 }
 
-router.post("/trigger-review", requireAuth, resolveScope, requireFields(["phone"]), async (req, res, next) => {
+/**
+ * Feature-gate middleware for client-role accounts (Admin → Features).
+ * When a feature is disabled for their client, the endpoint returns 403 so a
+ * hidden feature can't be called directly. Admins always pass — they manage all
+ * clients, so their own gating is the dashboard's job (which shows everything).
+ * @param {string} feature one of the Client.features keys
+ */
+function requireClientFeature(feature) {
+  return async (req, res, next) => {
+    if (req.user && req.user.role === "client") {
+      const client = req.scopedClientId ? await getClientById(req.scopedClientId) : null;
+      const allowed = !!(client && client.features && client.features[feature] !== false);
+      if (!allowed) {
+        return res.status(403).json({ error: `This feature is disabled for your client.` });
+      }
+    }
+    next();
+  };
+}
+
+/** Load per-client rules (protection days, consent gate) for batch operations. */
+async function clientBatchOpts(scopedClientId) {
+  if (!scopedClientId) return {};
+  const client = await getClientById(scopedClientId);
+  if (!client) return {};
+  return {
+    protectionDays: client.scheduler.protectionDays,
+    requireOptIn: client.compliance.requireOptIn,
+  };
+}
+
+router.post("/trigger-review", requireAuth, resolveScope, requireClientFeature("manualTrigger"), requireFields(["phone"]), async (req, res, next) => {
   try {
     const { phone, customerName, item } = req.body;
     const clientId = req.scopedClientId || (req.user.role === "client" ? req.user.clientId : null);
     const client = await resolveClient({ clientId, phone });
     const cId = client?.clientId || DEFAULT_CLIENT_ID;
+    // The client that messages a phone becomes its owner (creates the customer,
+    // or adopts a legacy customer that predates multi-tenancy) so the customer's
+    // replies are attributed back to this client in the webhook.
+    await storage.adoptCustomerByPhone(phone, { clientId: cId, name: customerName });
     const welcome = templates.welcomeMessage(client.name, item);
     const result = await twilioService.sendWhatsApp(phone, welcome);
 
@@ -101,7 +135,7 @@ router.post("/trigger-review", requireAuth, resolveScope, requireFields(["phone"
 
 router.post("/customers", requireAuth, resolveScope, requireFields(["name", "phone"]), async (req, res, next) => {
   try {
-    const { name, phone, visitDate, reviewProvided, additionalNotes } = req.body;
+    const { name, phone, visitDate, reviewProvided, additionalNotes, optedIn } = req.body;
     const customer = await storage.createCustomer({
       clientId: req.scopedClientId || DEFAULT_CLIENT_ID,
       name,
@@ -109,6 +143,7 @@ router.post("/customers", requireAuth, resolveScope, requireFields(["name", "pho
       visitDate: visitDate ? new Date(visitDate) : new Date(),
       reviewProvided: reviewProvided || false,
       additionalNotes: additionalNotes || "",
+      optedIn: optedIn !== undefined ? optedIn : true,
     });
     if (!customer) {
       return res.status(409).json({ error: "Customer with this phone already exists" });
@@ -142,12 +177,13 @@ router.get("/customers/:phone", requireAuth, resolveScope, async (req, res, next
 
 router.put("/customers/:phone", requireAuth, resolveScope, async (req, res, next) => {
   try {
-    const { name, visitDate, reviewProvided, additionalNotes, optedOut } = req.body;
+    const { name, visitDate, reviewProvided, additionalNotes, optedOut, optedIn } = req.body;
     const updated = await storage.updateCustomer(req.params.phone, {
       ...(name && { name }),
       ...(visitDate && { visitDate: new Date(visitDate) }),
       ...(reviewProvided !== undefined && { reviewProvided }),
       ...(additionalNotes !== undefined && { additionalNotes }),
+      ...(optedIn !== undefined && { optedIn }),
       ...(optedOut !== undefined && { optedOut, ...(optedOut ? { optedOutAt: new Date() } : { optedOutAt: null }) }),
     }, req.scopedClientId);
     if (!updated) return res.status(404).json({ error: "Customer not found" });
@@ -188,10 +224,10 @@ router.post("/clear-all-data", requireAuth, resolveScope, async (req, res, next)
   }
 });
 
-router.post("/trigger-batch", requireAuth, resolveScope, async (req, res, next) => {
+router.post("/trigger-batch", requireAuth, resolveScope, requireClientFeature("manualTrigger"), async (req, res, next) => {
   try {
     const clientId = req.scopedClientId;
-    const pending = await storage.findCustomersToContact(clientId);
+    const pending = await storage.findCustomersToContact(clientId, await clientBatchOpts(clientId));
     let sent = 0;
     // Send with a small concurrency pool so large batches return quickly
     // without hammering the WhatsApp provider all at once.
@@ -206,17 +242,17 @@ router.post("/trigger-batch", requireAuth, resolveScope, async (req, res, next) 
   }
 });
 
-router.get("/pending-preview", requireAuth, resolveScope, async (req, res, next) => {
+router.get("/pending-preview", requireAuth, resolveScope, requireClientFeature("manualTrigger"), async (req, res, next) => {
   try {
     const clientId = req.scopedClientId;
-    const pending = await storage.findCustomersToContact(clientId);
+    const pending = await storage.findCustomersToContact(clientId, await clientBatchOpts(clientId));
     res.json(pending);
   } catch (err) {
     next(err);
   }
 });
 
-router.post("/test-cron", requireAuth, resolveScope, async (req, res, next) => {
+router.post("/test-cron", requireAuth, resolveScope, requireClientFeature("manualTrigger"), async (req, res, next) => {
   try {
     const clientId = req.scopedClientId;
     const result = await scheduler.processPendingCustomers(clientId);
@@ -226,7 +262,7 @@ router.post("/test-cron", requireAuth, resolveScope, async (req, res, next) => {
   }
 });
 
-router.post("/upload-excel", requireAuth, resolveScope, upload.single("file"), async (req, res, next) => {
+router.post("/upload-excel", requireAuth, resolveScope, requireClientFeature("excelUpload"), upload.single("file"), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
     const clientId = req.scopedClientId || DEFAULT_CLIENT_ID;
@@ -303,6 +339,7 @@ router.get("/admin/clients/:clientId", requireAuth, requireAdmin, async (req, re
 router.post("/admin/clients", requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const client = await clientConfig.createClient(req.body);
+    scheduler.reschedule().catch((err) => console.error("reschedule after create:", err.message));
     res.status(201).json(client);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -312,6 +349,7 @@ router.post("/admin/clients", requireAuth, requireAdmin, async (req, res, next) 
 router.put("/admin/clients/:clientId", requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const client = await clientConfig.updateClient(req.params.clientId, req.body);
+    scheduler.reschedule().catch((err) => console.error("reschedule after update:", err.message));
     res.json(client);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -321,31 +359,10 @@ router.put("/admin/clients/:clientId", requireAuth, requireAdmin, async (req, re
 router.delete("/admin/clients/:clientId", requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const ok = await clientConfig.deleteClient(req.params.clientId);
+    scheduler.reschedule().catch((err) => console.error("reschedule after delete:", err.message));
     res.json({ ok });
   } catch (err) {
     res.status(400).json({ error: err.message });
-  }
-});
-
-// YAML template upload → creates a client
-router.post("/admin/clients/from-template", requireAuth, requireAdmin, upload.single("file"), async (req, res, next) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: "No template file uploaded" });
-    const yamlText = req.file.buffer.toString("utf-8");
-    const client = await clientConfig.createClientFromYaml(yamlText);
-    res.status(201).json(client);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// Return the bundled template so the UI can offer a download/preview
-router.get("/admin/template", requireAuth, requireAdmin, (req, res) => {
-  try {
-    const file = path.join(__dirname, "..", "config", "client-template.yaml");
-    res.type("yaml").send(fs.readFileSync(file, "utf-8"));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
   }
 });
 

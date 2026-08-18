@@ -8,6 +8,10 @@ let CURRENT_CLIENT = { clientId: "", name: "", features: {} };
 const CLIENT_MAP = {}; // clientId -> { name, features } (populated for admins)
 let selectionSeq = 0; // guards against stale async updates
 
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 function clientQ() {
   return CURRENT_CLIENT.clientId ? `?clientId=${encodeURIComponent(CURRENT_CLIENT.clientId)}` : "";
 }
@@ -92,19 +96,41 @@ function applyClientSelection(clientId) {
 }
 
 function applyFeatureGating() {
-  const panel = document.getElementById("panelTestLab");
-  if (!panel) return;
-  // Test Lab is the admin's/owner's testing tool: always visible to admins
-  // (so the layout never jumps when switching clients). For client-role
-  // accounts it's only visible when that business has the flag on.
   const me = ReviewAuth.getMe();
   const isClientUser = me && me.role === "client";
-  const allowed = !isClientUser || CURRENT_CLIENT.features.testLab === true;
-  // Only ever hides the panel (tab switching is what shows it), so gating can
-  // never fight with the active tab.
-  if (!allowed) panel.classList.add("hidden");
-  const tabBtn = document.getElementById("tabBtnTestLab");
-  if (tabBtn) tabBtn.style.display = allowed ? "" : "none";
+  const f = CURRENT_CLIENT.features || {};
+
+  // Client-role accounts see a feature only when its flag isn't off.
+  // Admins always see everything (they preview/manage all clients).
+  const show = (flag) => !isClientUser || flag !== false;
+  const setVisible = (el, visible) => { if (el) el.style.display = visible ? "" : "none"; };
+
+  // Overview tab = the "Dashboard" flag (stats + sentiment chart + recent).
+  setVisible(document.getElementById("tabBtnOverview"), show(f.dashboard));
+  setVisible(document.querySelector('#dashboardMain .tab-panel[data-panel="overview"]'), show(f.dashboard));
+
+  // Records history panel lives inside Overview.
+  setVisible(document.getElementById("panelRecent"), show(f.recordsHistory));
+
+  // Send tab: Manual + Batch are the "Manual trigger" feature; Excel is separate.
+  setVisible(document.getElementById("panelManual"), show(f.manualTrigger));
+  setVisible(document.getElementById("panelBatch"), show(f.manualTrigger));
+  setVisible(document.getElementById("panelExcel"), show(f.excelUpload));
+
+  // Test Lab: always visible to admins (so the layout never jumps when switching
+  // clients); for client-role accounts only when that business has the flag on.
+  const testLabAllowed = !isClientUser || f.testLab === true;
+  setVisible(document.getElementById("panelTestLab"), testLabAllowed);
+  setVisible(document.getElementById("tabBtnTestLab"), testLabAllowed);
+
+  // If gating hid the currently active tab, switch to the first visible one so
+  // the client never lands on an empty screen.
+  const tabBtns = document.querySelectorAll("#mainTabs .tab-btn");
+  const activeBtn = document.querySelector("#mainTabs .tab-btn.active");
+  if (activeBtn && activeBtn.style.display === "none") {
+    const firstVisible = Array.from(tabBtns).find((b) => b.style.display !== "none");
+    if (firstVisible) firstVisible.click();
+  }
 }
 
 function toast(message, type = "success") {
@@ -165,12 +191,12 @@ async function fetchJSON(url, options, timeoutMs = 15000) {
 
 // === Loading spinner ===
 function setLoading(btn, loading) {
+  if (!btn.dataset.originalText) btn.dataset.originalText = btn.textContent.trim();
   btn.disabled = loading;
-  btn.innerHTML = loading ? `<span class="spinner"></span> Processing...` : btn.dataset.originalText || btn.textContent;
-  if (!btn.dataset.originalText) btn.dataset.originalText = btn.textContent;
+  btn.innerHTML = loading ? `<span class="spinner"></span> Processing...` : btn.dataset.originalText;
   if (loading) {
     // Safety: auto-recover after 30s
-    setTimeout(() => { if (btn.disabled) { btn.disabled = false; btn.innerHTML = btn.dataset.originalText || btn.textContent; } }, 30000);
+    setTimeout(() => { if (btn.disabled) { btn.disabled = false; btn.innerHTML = btn.dataset.originalText; } }, 30000);
   }
 }
 
@@ -336,9 +362,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!name || !phone) { toast("Name and phone required", "error"); return; }
     setLoading(btn, true);
     try {
-      const body = { name, phone };
-      if (visitDate) body.visitDate = visitDate;
-      if (CURRENT_CLIENT.clientId) body.clientId = CURRENT_CLIENT.clientId;
+    const body = { name, phone };
+    if (visitDate) body.visitDate = visitDate;
+    body.optedIn = document.getElementById("crudOptIn") ? document.getElementById("crudOptIn").checked : true;
+    if (CURRENT_CLIENT.clientId) body.clientId = CURRENT_CLIENT.clientId;
       const res = await fetchJSON("/api/customers", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
@@ -365,15 +392,17 @@ document.addEventListener("DOMContentLoaded", () => {
         const tr = document.createElement("tr");
         tr.dataset.phone = c.phone;
         const visited = c.visitDate ? new Date(c.visitDate).toLocaleDateString() : "-";
+        const review = c.reviewText ? c.reviewText.length > 80 ? esc(c.reviewText.slice(0, 80)) + "…" : esc(c.reviewText) : "—";
         tr.innerHTML = `
-          <td><strong>${c.name}</strong></td>
-          <td style="font-family:monospace;font-size:.8rem">${c.phone}</td>
+          <td><strong>${esc(c.name)}</strong></td>
+          <td style="font-family:monospace;font-size:.8rem">${esc(c.phone)}</td>
           <td>${visited}</td>
           <td class="${c.firstContactedAt ? 'tag-yes' : 'tag-no'}">${c.firstContactedAt ? '✅ Yes' : '—'}</td>
           <td class="${c.reviewProvided ? 'tag-yes' : 'tag-no'}">${c.reviewProvided ? '✅ Yes' : '—'}</td>
+          <td title="${esc(c.reviewText || "")}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${review}</td>
           <td style="white-space:nowrap">
-            <button class="btn-edit" data-phone="${c.phone}" data-name="${c.name.replace(/"/g, '&quot;')}" data-visit="${c.visitDate || ''}" data-reviewed="${c.reviewProvided}">Edit</button>
-            <button class="btn-delete" data-phone="${c.phone}">Delete</button>
+            <button class="btn-edit" data-phone="${esc(c.phone)}" data-name="${esc(c.name.replace(/"/g, '&quot;'))}" data-visit="${c.visitDate || ''}" data-reviewed="${c.reviewProvided}" data-opted="${c.optedIn !== false}">Edit</button>
+            <button class="btn-delete" data-phone="${esc(c.phone)}">Delete</button>
           </td>`;
         tbody.appendChild(tr);
       });
@@ -390,6 +419,8 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("editName").value = target.dataset.name;
       document.getElementById("editVisitDate").value = target.dataset.visit ? target.dataset.visit.substring(0, 10) : "";
       document.getElementById("editReviewed").checked = target.dataset.reviewed === "true";
+      const optInEl = document.getElementById("editOptIn");
+      if (optInEl) optInEl.checked = target.dataset.opted !== "false";
       document.getElementById("crudEditArea").classList.remove("hidden");
     }
     if (target.classList.contains("btn-delete")) {
@@ -425,6 +456,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (name) body.name = name;
       if (visitDate) body.visitDate = visitDate;
       body.reviewProvided = reviewed;
+      const optInEl = document.getElementById("editOptIn");
+      if (optInEl) body.optedIn = optInEl.checked;
       if (CURRENT_CLIENT.clientId) body.clientId = CURRENT_CLIENT.clientId;
       const res = await fetchJSON(`/api/customers/${encodeURIComponent(editingPhone)}`, {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),

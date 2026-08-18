@@ -18,6 +18,10 @@ function parseExcel(buffer) {
     const notes = String(row.notes || row.Notes || row.additionalNotes || row.AdditionalNotes || row.item || row.Item || "").trim();
     const rp = row.reviewProvided ?? row.ReviewProvided ?? row["review provided"] ?? row["Review Provided"] ?? false;
     const reviewProvided = typeof rp === "boolean" ? rp : typeof rp === "number" ? rp === 1 : ["yes", "true", "1"].includes(String(rp).toLowerCase());
+    // Consent column (crew-curated imports are opted-in by default); only opt
+    // someone out if the sheet explicitly says so.
+    const oi = row.optedIn ?? row.OptedIn ?? row.consent ?? row.Consent ?? row["consent captured"] ?? true;
+    const optedIn = typeof oi === "boolean" ? oi : typeof oi === "number" ? oi === 1 : ["yes", "true", "1", "y"].includes(String(oi).toLowerCase());
     if (!name || !phoneRaw) {
       errors.push({ row: i + 2, reason: "Missing name or phone", data: row });
       continue;
@@ -34,6 +38,7 @@ function parseExcel(buffer) {
       visitDate: visitDate ? new Date(visitDate) : new Date(),
       reviewProvided,
       additionalNotes: notes,
+      optedIn,
     });
   }
   return { valid, errors, totalRows: rows.length };

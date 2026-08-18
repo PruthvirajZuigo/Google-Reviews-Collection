@@ -80,7 +80,7 @@ async function renderClients() {
       <td>${c.compliance.aiMode}</td>
       <td>${customers.length}</td>
       <td class="cell-actions">
-        ${c.isDefault ? "" : `<button class="btn-edit" data-edit="${c.clientId}">Edit</button>`}
+        <button class="btn-edit" data-edit="${c.clientId}">Edit</button>
         ${c.isDefault ? "" : `<button class="btn-delete" data-del="${c.clientId}">Delete</button>`}
       </td>`;
     tbody.appendChild(tr);
@@ -311,36 +311,6 @@ $("editSaveBtn").onclick = async () => {
 
 $("editCancelBtn").onclick = () => $("clientEditArea").classList.add("hidden");
 
-$("cliYamlBtn").onclick = async () => {
-  const file = $("cliYamlFile").files[0];
-  if (!file) return toast("Choose a .yaml file first", "error");
-  const formData = new FormData();
-  formData.append("file", file);
-  try {
-    const res = await ReviewAuth.apiFetch("/api/admin/clients/from-template", { method: "POST", body: formData });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Upload failed");
-    $("cliYamlResult").classList.remove("hidden");
-    $("cliYamlResult").textContent = `Client created: ${data.clientId} (${data.name})`;
-    toast(`Client created from template: ${data.clientId}`, "success");
-    loadClients();
-  } catch (err) {
-    toast(err.message, "error");
-  }
-};
-
-$("cliYamlDownload").onclick = async () => {
-  const res = await ReviewAuth.apiFetch("/api/admin/template");
-  if (!res.ok) return toast("Failed to download template", "error");
-  const text = await res.text();
-  const blob = new Blob([text], { type: "text/yaml" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "client-template.yaml";
-  a.click();
-  URL.revokeObjectURL(a.href);
-};
-
 $("userAddBtn").onclick = async () => {
   const username = $("userUsername").value.trim();
   if (!username) return toast("Username required", "error");
@@ -382,15 +352,15 @@ async function initAuth() {
     ReviewAuth.showLogin(() => {
       if (!ReviewAuth.isAdmin()) return showAccessDenied();
       ReviewAuth.renderAuthUI();
-      loadClients();
-      loadUsers();
+      // Load clients first so the users table can resolve client names
+      // (previously the two calls raced and every client showed "—").
+      loadClients().then(loadUsers);
     });
     return;
   }
   if (!ReviewAuth.isAdmin()) return showAccessDenied();
   ReviewAuth.renderAuthUI();
-  loadClients();
-  loadUsers();
+  loadClients().then(loadUsers);
 }
 
 initAuth();
